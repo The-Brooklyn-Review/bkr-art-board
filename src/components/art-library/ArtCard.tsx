@@ -1,21 +1,6 @@
+import { useRef } from "react";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
-
-const KNOWN_LABEL_ORDER = [
-  "landscape",
-  "photography",
-  "figurative",
-  "painting/drawing",
-  "collage",
-  "abstract",
-  "multimedia",
-];
-
-function displayLabel(name: string): string {
-  return name
-    .split("/")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("/");
-}
+import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 
 const USED_STATE_LABELS: Record<string, string> = {
   available: "Available",
@@ -29,17 +14,28 @@ const USED_STATE_LABELS: Record<string, string> = {
 export function ArtCard({
   asset,
   onOpen,
+  onHoverIntent,
 }: {
   asset: LibraryAsset;
   onOpen: () => void;
+  /** Called after the pointer lingers on the card for a moment — a quick
+   * pass-through while scrolling shouldn't trigger a prefetch. */
+  onHoverIntent?: () => void;
 }) {
   const knownLabels = asset.labels
-    .filter((l) => KNOWN_LABEL_ORDER.includes(l.name))
-    .sort((a, b) => KNOWN_LABEL_ORDER.indexOf(a.name) - KNOWN_LABEL_ORDER.indexOf(b.name));
+    .filter((l) => KNOWN_LABELS.includes(l.name))
+    .sort((a, b) => KNOWN_LABELS.indexOf(a.name) - KNOWN_LABELS.indexOf(b.name));
+
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   return (
     <button
       onClick={onOpen}
+      onMouseEnter={() => {
+        if (!onHoverIntent) return;
+        hoverTimeout.current = setTimeout(onHoverIntent, 150);
+      }}
+      onMouseLeave={() => clearTimeout(hoverTimeout.current)}
       className="group mb-4 block w-full text-left break-inside-avoid cursor-zoom-in"
     >
       <div className="overflow-hidden bg-surface border border-border">

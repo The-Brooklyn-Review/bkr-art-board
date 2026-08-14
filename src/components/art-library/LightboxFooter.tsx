@@ -2,115 +2,14 @@
 
 import { useState, useTransition, useEffect } from "react";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
-import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutations";
+import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
+import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
-
-const KNOWN_LABELS = [
-  "landscape",
-  "photography",
-  "figurative",
-  "painting/drawing",
-  "collage",
-  "abstract",
-  "multimedia",
-];
-
-function displayLabel(name: string): string {
-  return name
-    .split("/")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("/");
-}
-
-function ActionLinks({
-  asset,
-  isPending,
-  thumbnailSet,
-  onSetThumbnail,
-  onHide,
-  onPublish,
-  publishPending = false,
-  published = false,
-  stacked = false,
-}: {
-  asset: LibraryAsset;
-  isPending: boolean;
-  thumbnailSet: boolean;
-  onSetThumbnail: () => void;
-  onHide: () => void;
-  onPublish: () => void;
-  publishPending?: boolean;
-  published?: boolean;
-  stacked?: boolean;
-}) {
-  return (
-    <div className={stacked ? "flex flex-col gap-2.5 items-start" : "flex gap-4 items-center flex-wrap"}>
-      <button
-        onClick={onPublish}
-        disabled={isPending || publishPending || published}
-        className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50"
-      >
-        {published ? "✓ Published" : publishPending ? "Publishing…" : "Mark as Published"}
-      </button>
-      {asset.submittableUrl && (
-        <a
-          href={asset.submittableUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-accent underline hover:opacity-80"
-        >
-          Open in Submittable
-        </a>
-      )}
-      {asset.originalUrl && (
-        <a
-          href={asset.originalUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-accent underline hover:opacity-80"
-        >
-          Open original file
-        </a>
-      )}
-      <a href={asset.reviewUrl} className="text-xs text-accent underline hover:opacity-80">
-        View full submission
-      </a>
-      <button
-        onClick={onSetThumbnail}
-        disabled={isPending || thumbnailSet}
-        className="text-sm text-text-muted underline hover:text-text disabled:opacity-50 py-1"
-      >
-        {thumbnailSet ? "✓ Set as thumbnail" : "Set as submission thumbnail"}
-      </button>
-      <button
-        onClick={onHide}
-        disabled={isPending}
-        className="text-sm text-text-muted underline hover:text-text disabled:opacity-50 py-1"
-      >
-        {isPending ? "Hiding…" : "Hide this page"}
-      </button>
-    </div>
-  );
-}
-
-function CollapsibleText({ label, text }: { label: string; text: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-2">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="text-xs text-text-muted underline hover:text-text"
-      >
-        {open ? `Hide ${label.toLowerCase()}` : label}
-      </button>
-      {open && (
-        <p className="text-xs text-text-muted mt-1 max-w-md whitespace-pre-wrap max-h-24 overflow-y-auto">
-          {text}
-        </p>
-      )}
-    </div>
-  );
-}
+import { ActionLinks } from "./ActionLinks";
+import { ConfirmModal } from "./ConfirmModal";
+import { CoverLetterModal } from "./CoverLetterModal";
+import { MoreActionsSheet } from "./MoreActionsSheet";
+import { CollapsibleText } from "./CollapsibleText";
 
 export function LightboxFooter({
   asset,
@@ -125,13 +24,20 @@ export function LightboxFooter({
 }) {
   const [isPending, startTransition] = useTransition();
   const [isStarred, setIsStarred] = useState(false);
-  const [thumbnailSet, setThumbnailSet] = useState(false);
   const [showActions, setShowActions] = useState(false);
-  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [showCoverLetter, setShowCoverLetter] = useState(false);
+  const [showHideConfirm, setShowHideConfirm] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [publishPending, setPublishPending] = useState(false);
+  const [published, setPublished] = useState(false);
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
 
+  // Re-reads from localStorage whenever the lightbox navigates to a
+  // different asset (sibling nav, next/prev) — isStarred is per-asset, so
+  // it can't be derived once at mount.
   useEffect(() => {
     const starred = localStorage.getItem(`starred-${asset.id}`) === "true";
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (localStorage), not derivable from props/state
     setIsStarred(starred);
   }, [asset.id]);
 
@@ -145,144 +51,185 @@ export function LightboxFooter({
     }
   };
 
-  const handleHide = () => {
+  const handleHideConfirmed = () => {
+    setShowHideConfirm(false);
     startTransition(async () => {
       await setAssetVisibility(asset.id, false);
       onHidden();
     });
   };
 
-  const handleSetThumbnail = () => {
+  const handlePublishConfirmed = () => {
+    setShowPublishConfirm(false);
+    setPublishPending(true);
     startTransition(async () => {
-      await setSubmissionThumbnail(asset.submissionId, asset.id);
-      setThumbnailSet(true);
+      await markAssetPublished(asset.id);
+      setPublished(true);
+      setPublishPending(false);
     });
   };
 
   return (
-    <div
-      style={{ maxHeight: LIGHTBOX_FOOTER_MAX_HEIGHT }}
-      className="absolute bottom-0 left-0 right-0 overflow-y-auto bg-bg/90 backdrop-blur-sm border-t border-border px-4 py-3 sm:px-6 sm:py-4"
-    >
-      {/*
-        Side-by-side (text left, siblings right) squeezed the text column
-        on mobile — that's what was wrapping the artist name/title into a
-        ragged mess. flex-col-reverse stacks them instead, siblings on top,
-        full width, no DOM reordering needed: sm:flex-row restores the
-        original side-by-side layout unchanged at wider widths.
-      */}
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 max-w-5xl mx-auto">
-        <div className="min-w-0 flex gap-2 items-start">
-          <button
-            onClick={handleToggleStar}
-            className="shrink-0 text-3xl sm:text-4xl leading-none hover:scale-110 transition-transform"
-            title={isStarred ? "Remove from starred" : "Add to starred"}
-            aria-label={isStarred ? "Remove from starred" : "Add to starred"}
-          >
-            {isStarred ? "⭐" : "☆"}
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="font-[family-name:var(--font-display)] text-lg text-text">
-              {asset.artistName}
-            </p>
-            <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
-          {knownLabels.length > 0 && (
-            <p className="text-xs text-accent uppercase tracking-wide mt-1">
-              {knownLabels.map((l) => displayLabel(l.name)).join(" · ")}
-            </p>
-          )}
-          {asset.originalFilename && (
-            <p className="text-xs text-text-muted mt-1">
-              {asset.originalFilename}
-              {asset.pageNumber ? ` · page ${asset.pageNumber}` : ""}
-            </p>
-          )}
+    <>
+      <ConfirmModal
+        open={showHideConfirm}
+        title="Hide this artwork?"
+        message="This will remove the artwork from the library view."
+        confirmText="Hide"
+        onConfirm={handleHideConfirmed}
+        onCancel={() => setShowHideConfirm(false)}
+        isDestructive
+      />
+      <ConfirmModal
+        open={showPublishConfirm}
+        title="Mark as published?"
+        message="This will mark the artwork as published. This action cannot be undone."
+        confirmText="Publish"
+        onConfirm={handlePublishConfirmed}
+        onCancel={() => setShowPublishConfirm(false)}
+      />
+      <CoverLetterModal
+        open={showCoverLetter}
+        onClose={() => setShowCoverLetter(false)}
+        title="Cover Letter / Statement"
+        content={asset.coverLetter || ""}
+      />
+      <MoreActionsSheet
+        open={showActions}
+        onClose={() => setShowActions(false)}
+        asset={asset}
+        isPending={isPending}
+        onHide={() => {
+          setShowActions(false);
+          setShowHideConfirm(true);
+        }}
+        onPublish={() => {
+          setShowActions(false);
+          setShowPublishConfirm(true);
+        }}
+        publishPending={publishPending}
+        published={published}
+      />
+      <div
+        style={{ maxHeight: LIGHTBOX_FOOTER_MAX_HEIGHT }}
+        className="absolute bottom-0 left-0 right-0 overflow-y-auto bg-bg/90 backdrop-blur-sm border-t border-border px-4 py-3 sm:px-6 sm:py-4"
+      >
+        <div className="max-w-5xl mx-auto">
+          {/* Top Row: Metadata (left) + Siblings (right) */}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 mb-3">
+            {/* Left: Artist/Title/Metadata (star moved to footer) */}
+            <div className="min-w-0 flex-1">
+              <p className="font-[family-name:var(--font-display)] text-lg text-text">
+                {asset.artistName}
+              </p>
+              <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
+              {knownLabels.length > 0 && (
+                <p className="text-xs text-accent uppercase tracking-wide mt-1">
+                  {knownLabels.map((l) => displayLabel(l.name)).join(" · ")}
+                </p>
+              )}
+              {asset.originalFilename && (
+                <p className="text-xs text-text-muted mt-1">
+                  {asset.originalFilename}
+                  {asset.pageNumber ? ` · page ${asset.pageNumber}` : ""}
+                </p>
+              )}
+            </div>
 
-          {asset.extractedText && (
-            <CollapsibleText label="Page text" text={asset.extractedText} />
-          )}
-
-          {/* Cover-letter toggle and the mobile "More actions" toggle
-              share one row (left/right) instead of stacking as separate
-              lines — two small disclosure controls, no reason to spend
-              two rows on them. Generous py so both stay easy to tap.
-              "More actions" only exists on mobile; on desktop this row is
-              just the cover-letter toggle, same as before. */}
-          <div className="mt-2 flex items-center justify-between gap-4">
-            {asset.coverLetter ? (
-              <button
-                onClick={() => setCoverLetterOpen((v) => !v)}
-                className="text-xs text-text-muted underline hover:text-text py-1.5"
-              >
-                {coverLetterOpen ? "Hide cover letter / statement" : "Cover letter / statement"}
-              </button>
-            ) : (
-              <span />
+            {/* Right: Siblings thumbnails */}
+            {siblings.length > 1 && (
+              <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 sm:max-w-xs overflow-x-auto scrollbar-hide">
+                {siblings.map(({ asset: sib, index }) => (
+                  <button
+                    key={sib.id}
+                    onClick={() => onJumpToSibling(index)}
+                    className={`shrink-0 w-12 h-12 border overflow-hidden ${
+                      sib.id === asset.id
+                        ? "border-accent"
+                        : "border-border opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sib.thumbnailUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
             )}
-            <button
-              onClick={() => setShowActions((v) => !v)}
-              className="sm:hidden text-xs text-text-muted underline hover:text-text py-1.5"
-            >
-              {showActions ? "Hide actions" : "More actions"}
-            </button>
           </div>
-          {asset.coverLetter && coverLetterOpen && (
-            <p className="text-xs text-text-muted mt-1 max-w-md whitespace-pre-wrap max-h-24 overflow-y-auto">
-              {asset.coverLetter}
-            </p>
+
+          {/* Page Text Expansion */}
+          {asset.extractedText && (
+            <div className="mb-4">
+              <CollapsibleText label="Page text" text={asset.extractedText} />
+            </div>
           )}
-          </div>
-        </div>
 
-        {/* Desktop: always visible, unchanged. Mobile: five links
-            wrapping into a ragged multi-line block was the crowding
-            problem — collapsed behind "More actions" above instead,
-            stacked vertically (more thumb-friendly) when opened. */}
-        <div className="hidden sm:block mt-2">
-            <ActionLinks
-              asset={asset}
-              isPending={isPending}
-              thumbnailSet={thumbnailSet}
-              onSetThumbnail={handleSetThumbnail}
-              onHide={handleHide}
-            />
-        </div>
-        {showActions && (
-          <div className="sm:hidden mt-2.5">
-            <ActionLinks
-              asset={asset}
-              isPending={isPending}
-              thumbnailSet={thumbnailSet}
-              onSetThumbnail={handleSetThumbnail}
-              onHide={handleHide}
-              stacked
-            />
-          </div>
-        )}
-
-        {siblings.length > 1 && (
-          <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 sm:max-w-xs overflow-x-auto scrollbar-hide">
-            {siblings.map(({ asset: sib, index }) => (
+          {/* Cover Letter Link */}
+          {asset.coverLetter && (
+            <div className="mb-4">
               <button
-                key={sib.id}
-                onClick={() => onJumpToSibling(index)}
-                className={`shrink-0 w-12 h-12 border overflow-hidden ${
-                  sib.id === asset.id ? "border-accent" : "border-border opacity-60 hover:opacity-100"
-                }`}
+                onClick={() => setShowCoverLetter(true)}
+                className="text-xs text-text-muted underline hover:text-text"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={sib.thumbnailUrl}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover"
-                />
+                Cover Letter / Statement
               </button>
-            ))}
+            </div>
+          )}
+
+          {/* Desktop Action Row */}
+          <div className="hidden sm:block border-t border-border pt-3">
+            <ActionLinks
+              asset={asset}
+              isPending={isPending}
+              isStarred={isStarred}
+              onToggleStar={handleToggleStar}
+              onHide={() => setShowHideConfirm(true)}
+              onPublish={() => setShowPublishConfirm(true)}
+              publishPending={publishPending}
+              published={published}
+            />
           </div>
-        )}
+
+          {/* Mobile: primary row (star, submittable) + sheet for the rest */}
+          <div className="sm:hidden border-t border-border pt-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleToggleStar}
+                className="text-2xl leading-none hover:scale-110 transition-transform"
+                title={isStarred ? "Remove from starred" : "Add to starred"}
+                aria-label={isStarred ? "Remove from starred" : "Add to starred"}
+              >
+                {isStarred ? "⭐" : "☆"}
+              </button>
+
+              {asset.submittableUrl && (
+                <a
+                  href={asset.submittableUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
+                >
+                  Open in Submittable
+                </a>
+              )}
+
+              <button
+                onClick={() => setShowActions(true)}
+                className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text py-2"
+              >
+                More actions
+                <span aria-hidden>›</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

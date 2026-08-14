@@ -23,25 +23,9 @@
           "photograph collage",
           "layered composition"
         ],
-        "visionInterpretive": [
-          "dystopian",
-          "nostalgic",
-          "melancholic",
-          "contemplative",
-          "elegiac"
-        ],
-        "dominantColors": [
-          "beige",
-          "grey",
-          "cream",
-          "muted brown"
-        ],
-        "subjects": [
-          "abandoned building",
-          "old photographs",
-          "archive space",
-          "decay"
-        ],
+        "visionInterpretive": ["dystopian", "nostalgic", "melancholic", "contemplative", "elegiac"],
+        "dominantColors": ["beige", "grey", "cream", "muted brown"],
+        "subjects": ["abandoned building", "old photographs", "archive space", "decay"],
         "textThemes": [
           "post-apocalyptic",
           "cyclical decay",
@@ -99,17 +83,8 @@
           "contemplative",
           "introspective"
         ],
-        "dominantColors": [
-          "soft pink",
-          "dusty rose",
-          "pale cream",
-          "warm neutral"
-        ],
-        "subjects": [
-          "female figure",
-          "flowing form",
-          "gentle gesture"
-        ],
+        "dominantColors": ["soft pink", "dusty rose", "pale cream", "warm neutral"],
+        "subjects": ["female figure", "flowing form", "gentle gesture"],
         "textThemes": [
           "human form",
           "gesture",
@@ -163,17 +138,8 @@
           "conceptual",
           "deconstructed"
         ],
-        "dominantColors": [
-          "deep charcoal",
-          "burnt sienna",
-          "ochre",
-          "earth tone"
-        ],
-        "subjects": [
-          "abstract composition",
-          "fragmented imagery",
-          "layered forms"
-        ],
+        "dominantColors": ["deep charcoal", "burnt sienna", "ochre", "earth tone"],
+        "subjects": ["abstract composition", "fragmented imagery", "layered forms"],
         "textThemes": [
           "conceptual",
           "perception",
@@ -227,18 +193,8 @@
           "transcendent",
           "layered"
         ],
-        "dominantColors": [
-          "cadmium red",
-          "burnt umber",
-          "steel grey",
-          "golden yellow"
-        ],
-        "subjects": [
-          "highway landscape",
-          "power lines",
-          "fields",
-          "erosion"
-        ],
+        "dominantColors": ["cadmium red", "burnt umber", "steel grey", "golden yellow"],
+        "subjects": ["highway landscape", "power lines", "fields", "erosion"],
         "textThemes": [
           "queerness",
           "nostalgia",
@@ -298,18 +254,8 @@
           "vulnerable",
           "introspective"
         ],
-        "dominantColors": [
-          "deep ultramarine",
-          "soft grey",
-          "warm umber",
-          "pale cream"
-        ],
-        "subjects": [
-          "sleeping figures",
-          "bed",
-          "interior space",
-          "unconscious"
-        ],
+        "dominantColors": ["deep ultramarine", "soft grey", "warm umber", "pale cream"],
+        "subjects": ["sleeping figures", "bed", "interior space", "unconscious"],
         "textThemes": [
           "sleep",
           "consciousness",

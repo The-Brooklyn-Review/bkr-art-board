@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getSubmission, getSubmissionsQueue } from "@/lib/submissions/getSubmission";
 import { SubmissionReviewClient } from "@/components/submissions/SubmissionReviewClient";
 
+// getSubmission() signs short-lived R2 URLs per request — caching this
+// route would serve expired image links.
 export const dynamic = "force-dynamic";
 
 export default async function SubmissionReviewPage({

@@ -21,11 +21,7 @@ import {
   fetchAllPages,
   SubmittableError,
 } from "../src/lib/submittable/client.ts";
-import type {
-  ListProject,
-  Label,
-  SubmissionListItem,
-} from "../src/lib/submittable/types.ts";
+import type { ListProject, Label, SubmissionListItem } from "../src/lib/submittable/types.ts";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
@@ -38,6 +34,12 @@ function dump(name: string, data: unknown) {
   console.log(`   ↳ wrote fixtures/${name}`);
 }
 
+// Defaults below are tied to the Winter 2025 cycle this pipeline was built
+// for. A future submission cycle (new project, different label/count) needs
+// its own values — set the ART_LIBRARY_* env vars rather than editing these
+// defaults, so old fixtures/config stay reproducible. If PROJECT_NAME
+// doesn't match, this script lists every available project name to pick
+// the new one from (see "not found" branch below).
 const PROJECT_NAME = process.env.ART_LIBRARY_PROJECT_NAME ?? "Winter 2025 Visual Arts Submissions";
 const REQUIRED_LABEL = process.env.ART_LIBRARY_REQUIRED_LABEL ?? "Consider";
 const REQUIRED_STATUS = process.env.ART_LIBRARY_REQUIRED_STATUS ?? "completed";
@@ -124,12 +126,16 @@ async function main() {
     labels.forEach((l) => console.log(`    · ${l.name}  [${l.labelId}]  (count ${l.count})`));
     throw new Error("Consider label not found — see list above.");
   }
-  console.log(`✓ "${considerLabel.name}" label → ${considerLabel.labelId} (org-wide count ${considerLabel.count})`);
+  console.log(
+    `✓ "${considerLabel.name}" label → ${considerLabel.labelId} (org-wide count ${considerLabel.count})`,
+  );
 
   console.log("   Art labels present in org:");
   for (const name of KNOWN_ART_LABELS) {
     const l = byName(name);
-    console.log(l ? `    ✓ ${name} → ${l.labelId}` : `    ✗ ${name} — NOT FOUND (may differ in spelling)`);
+    console.log(
+      l ? `    ✓ ${name} → ${l.labelId}` : `    ✗ ${name} — NOT FOUND (may differ in spelling)`,
+    );
   }
 
   // 4. MATCHING SUBMISSIONS
@@ -179,14 +185,19 @@ async function main() {
   if (filtered.length === EXPECTED) {
     console.log("✓ EXACT MATCH.");
   } else {
-    console.log(`⚠ Count differs from expected by ${filtered.length - EXPECTED}. See [5] breakdown above to diagnose.`);
+    console.log(
+      `⚠ Count differs from expected by ${filtered.length - EXPECTED}. See [5] breakdown above to diagnose.`,
+    );
   }
 
   console.log("\nFirst matching submissions:");
   filtered.slice(0, 8).forEach((s, i) => {
-    const name = [s.submitterFirstName, s.submitterLastName].filter(Boolean).join(" ") || "(no name)";
+    const name =
+      [s.submitterFirstName, s.submitterLastName].filter(Boolean).join(" ") || "(no name)";
     const labelNames = (s.labels ?? []).map(labelName).join(", ");
-    console.log(`  ${String(i + 1).padStart(2)}. ${name.padEnd(24)} "${s.submissionTitle ?? "(untitled)"}"`);
+    console.log(
+      `  ${String(i + 1).padStart(2)}. ${name.padEnd(24)} "${s.submissionTitle ?? "(untitled)"}"`,
+    );
     console.log(`      status=${s.submissionStatus}  labels=[${labelNames}]`);
     console.log(`      submissionId=${s.submissionId}`);
   });

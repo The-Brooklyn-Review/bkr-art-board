@@ -2,12 +2,7 @@
 // where that package unconditionally throws (see src/lib/db/index.ts).
 import sharp from "sharp";
 
-export type PageType =
-  | "artwork"
-  | "cover_statement"
-  | "cv_bio"
-  | "contact_sheet"
-  | "unknown";
+export type PageType = "artwork" | "cover_statement" | "cv_bio" | "contact_sheet" | "unknown";
 
 /**
  * Heuristic-only page classification (no ML). Downsamples to 60x60 and

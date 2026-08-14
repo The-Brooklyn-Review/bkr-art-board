@@ -1,10 +1,6 @@
 // No `server-only` guard: shared with standalone scripts run via tsx,
 // where that package unconditionally throws (see src/lib/db/index.ts).
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Singleton — the art library page signs 200+ URLs per request; a fresh
@@ -32,11 +28,7 @@ const BUCKET = () => {
   return bucket;
 };
 
-export async function uploadToR2(
-  key: string,
-  body: Buffer,
-  contentType: string,
-): Promise<void> {
+export async function uploadToR2(key: string, body: Buffer, contentType: string): Promise<void> {
   await client().send(
     new PutObjectCommand({
       Bucket: BUCKET(),
@@ -54,13 +46,8 @@ export async function uploadToR2(
  * mid-session with the old 1h expiry. Still short-lived, just not
  * aggressively so, since these are never meant to be permanent links.
  */
-export async function getSignedR2Url(
-  key: string,
-  expiresInSeconds = 21600,
-): Promise<string> {
-  return getSignedUrl(
-    client(),
-    new GetObjectCommand({ Bucket: BUCKET(), Key: key }),
-    { expiresIn: expiresInSeconds },
-  );
+export async function getSignedR2Url(key: string, expiresInSeconds = 21600): Promise<string> {
+  return getSignedUrl(client(), new GetObjectCommand({ Bucket: BUCKET(), Key: key }), {
+    expiresIn: expiresInSeconds,
+  });
 }

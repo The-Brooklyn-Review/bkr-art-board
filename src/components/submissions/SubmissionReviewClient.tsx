@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
-import type { SubmissionDetail, SubmissionQueueItem, ReviewAsset } from "@/lib/submissions/getSubmission";
+import type {
+  SubmissionDetail,
+  SubmissionQueueItem,
+  ReviewAsset,
+} from "@/lib/submissions/getSubmission";
 import {
   setLocalRecommendation,
   setPageType,
@@ -112,10 +116,18 @@ export function SubmissionReviewClient({
         <main className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative bg-black min-h-0">
             {asset ? (
+              // key={asset.id}: forces a remount on page change, so zoom/pan
+              // from the previous page doesn't carry over to the next one.
               <TransformWrapper key={asset.id} centerOnInit>
                 <TransformComponent
                   wrapperStyle={{ width: "100%", height: "100%" }}
-                  contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  contentStyle={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -226,7 +238,9 @@ export function SubmissionReviewClient({
           )}
 
           <div className="mt-5 pt-4 border-t border-border">
-            <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Local recommendation</p>
+            <p className="text-xs text-text-muted uppercase tracking-wide mb-2">
+              Local recommendation
+            </p>
             <div className="flex flex-col gap-1.5">
               {RECOMMENDATIONS.map((r) => (
                 <button
@@ -326,17 +340,25 @@ export function SubmissionReviewClient({
             )}
             <button
               disabled={isPending}
-              onClick={() => runAction(() => setNeedsSubmittableUpdate(submission.id, !submission.needsSubmittableUpdate))}
+              onClick={() =>
+                runAction(() =>
+                  setNeedsSubmittableUpdate(submission.id, !submission.needsSubmittableUpdate),
+                )
+              }
               className="text-xs text-left text-text-muted underline hover:text-text disabled:opacity-50"
             >
-              {submission.needsSubmittableUpdate ? "✓ Marked: Needs Submittable Update" : "Mark Needs Submittable Update"}
+              {submission.needsSubmittableUpdate
+                ? "✓ Marked: Needs Submittable Update"
+                : "Mark Needs Submittable Update"}
             </button>
             <button
               disabled={isPending || submission.submittableUpdateDone}
               onClick={() => runAction(() => markSubmittableUpdateDone(submission.id))}
               className="text-xs text-left text-text-muted underline hover:text-text disabled:opacity-50"
             >
-              {submission.submittableUpdateDone ? "✓ Done in Submittable" : "Mark Done in Submittable"}
+              {submission.submittableUpdateDone
+                ? "✓ Done in Submittable"
+                : "Mark Done in Submittable"}
             </button>
           </div>
         </aside>

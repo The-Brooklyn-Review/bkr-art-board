@@ -11,8 +11,7 @@
  * components, route handlers, or standalone scripts.)
  */
 
-const BASE_URL =
-  process.env.SUBMITTABLE_API_BASE_URL ?? "https://submittable-api.submittable.com";
+const BASE_URL = process.env.SUBMITTABLE_API_BASE_URL ?? "https://submittable-api.submittable.com";
 
 function getApiKey(): string {
   const key = process.env.SUBMITTABLE_API_KEY;
@@ -63,10 +62,7 @@ export class SubmittableError extends Error {
  * Low-level fetch wrapper. Throws SubmittableError on non-2xx (fail loud).
  * Returns parsed JSON, or null for 204.
  */
-export async function submittableFetch<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function submittableFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const res = await fetch(url, {
     ...options,

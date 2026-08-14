@@ -1,3 +1,10 @@
+/**
+ * Manual QA helper: dumps every submission with its labels, files, and
+ * assets (type, page, visibility, dimensions, storage path) for eyeballing
+ * that an import batch landed correctly.
+ *
+ * Run: npx tsx scripts/verify-phase2.ts
+ */
 import { config } from "dotenv";
 import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";

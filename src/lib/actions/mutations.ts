@@ -7,16 +7,13 @@ import { prisma } from "@/lib/db";
  * Every mutation here is local-only — never touches Submittable. Per plan
  * §22, v1 stays read/import-focused against the official system; all
  * review state (recommendations, visibility, notes, thumbnails) lives only
- * in this app's DB. Each mutation writes a ReviewAction audit row too,
- * matching the plan's schema design (§12.7).
+ * in this app's DB. Most mutations also write a ReviewAction audit row,
+ * matching the plan's schema design (§12.7) — setNeedsSubmittableUpdate is
+ * the one exception, left unaudited as a frequently-toggled flag.
  */
 
 export type LocalReviewRecommendation =
-  | "accept"
-  | "consider_or_delayed_accept"
-  | "tiered_reject"
-  | "reject"
-  | "unreviewed";
+  "accept" | "consider_or_delayed_accept" | "tiered_reject" | "reject" | "unreviewed";
 
 export type PageType = "artwork" | "cover_statement" | "cv_bio" | "contact_sheet" | "unknown";
 

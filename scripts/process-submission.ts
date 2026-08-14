@@ -3,10 +3,20 @@
  * every uploaded file, render PDFs to pages, classify + crop + thumbnail
  * each page, upload everything to R2, and write it all to the DB.
  *
+ * Two-stage pipeline — run dry-run.ts first. This script reads the
+ * submission list and labels from fixtures/submissions-matching.json and
+ * fixtures/labels.json (written by dry-run.ts), not from a live API list
+ * call — only per-file downloads below hit the live Submittable API
+ * directly. For a new submission cycle, re-run dry-run.ts (with updated
+ * ART_LIBRARY_* env vars) to regenerate those fixtures before running this.
+ *
  * A failure at any stage for one submission or one file is caught, logged,
  * and recorded in the DB (sync_status/processing_status = 'error' with the
  * real error message) — it never aborts the batch. See the final summary
  * printed at the end for a full list of what failed and why.
+ *
+ * Idempotent per file: re-running replaces that file's assets rather than
+ * duplicating them (see the deleteMany before asset creation below).
  *
  * Run:
  *   npx tsx scripts/process-submission.ts <submissionId> [submissionId...]
@@ -82,9 +92,7 @@ async function ensureLabels(labelIds: string[]) {
 }
 
 async function downloadFile(entryId: string, fileId: string): Promise<Buffer> {
-  const { url } = await submittableFetch<{ url: string }>(
-    `/v4/entries/${entryId}/files/${fileId}`,
-  );
+  const { url } = await submittableFetch<{ url: string }>(`/v4/entries/${entryId}/files/${fileId}`);
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`File download failed: HTTP ${res.status} for ${url}`);
@@ -102,9 +110,7 @@ async function processImageVariants(sourceBuffer: Buffer, isArtwork: boolean) {
   // caption text below it (title/year/medium), then trims — a plain trim()
   // alone would keep the caption since it's non-white too. See
   // src/lib/processing/crop.ts.
-  const thumbSource = isArtwork
-    ? await extractArtworkRegion(sourceBuffer)
-    : sourceBuffer;
+  const thumbSource = isArtwork ? await extractArtworkRegion(sourceBuffer) : sourceBuffer;
   const thumb = await sharp(thumbSource)
     .resize({ width: 1000, height: 1000, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82 })
@@ -117,8 +123,7 @@ async function processImageVariants(sourceBuffer: Buffer, isArtwork: boolean) {
     thumb,
     width: thumbMeta.width ?? null,
     height: thumbMeta.height ?? null,
-    aspectRatio:
-      thumbMeta.width && thumbMeta.height ? thumbMeta.width / thumbMeta.height : null,
+    aspectRatio: thumbMeta.width && thumbMeta.height ? thumbMeta.width / thumbMeta.height : null,
   };
 }
 
@@ -273,7 +278,14 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
   if (!summary) {
     const msg = `Not found in fixtures/submissions-matching.json — re-run dry-run.ts first`;
     console.error(`  ✗ ${msg}`);
-    return { submissionId, artistName: "?", status: "failed", assetCount: 0, fileErrors: [], fatalError: msg };
+    return {
+      submissionId,
+      artistName: "?",
+      status: "failed",
+      assetCount: 0,
+      fileErrors: [],
+      fatalError: msg,
+    };
   }
 
   const artistName = `${summary.submitterFirstName} ${summary.submitterLastName}`;
@@ -305,7 +317,9 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
     entries = await submittableFetch<EntriesResponse>(`/v4/entries/submissions/${submissionId}`);
     const initialEntryCheck = entries.formEntries.find((fe) => fe.formType === "initial");
     if (!initialEntryCheck) throw new Error("No initial-form entry found");
-    console.log(`  ✓ entryId=${initialEntryCheck.entry.entryId}, ${initialEntryCheck.entry.fieldData.length} fields`);
+    console.log(
+      `  ✓ entryId=${initialEntryCheck.entry.entryId}, ${initialEntryCheck.entry.fieldData.length} fields`,
+    );
 
     console.log("\n[2] Ensuring labels exist…");
     await ensureLabels(summary.labels);
@@ -339,7 +353,9 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
     });
 
     for (const labelId of summary.labels) {
-      const label = await prisma.submittableLabel.findUnique({ where: { submittableLabelId: labelId } });
+      const label = await prisma.submittableLabel.findUnique({
+        where: { submittableLabelId: labelId },
+      });
       if (!label) continue;
       await prisma.submissionLabel.upsert({
         where: { submissionId_labelId: { submissionId: submission.id, labelId: label.id } },
@@ -355,7 +371,14 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
       where: { id: submission.id },
       data: { syncStatus: "error", processingStatus: "error", processingError: msg },
     });
-    return { submissionId, artistName, status: "failed", assetCount: 0, fileErrors: [], fatalError: msg };
+    return {
+      submissionId,
+      artistName,
+      status: "failed",
+      assetCount: 0,
+      fileErrors: [],
+      fatalError: msg,
+    };
   }
 
   const initialEntry = entries.formEntries.find((fe) => fe.formType === "initial")!.entry;
@@ -370,7 +393,13 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
     const file = allFiles[fileIndex];
     console.log(`\n  File ${fileIndex + 1}/${allFiles.length}: ${file.fileName}`);
     try {
-      assetCount += await processFile(submission.id, submissionId, initialEntry.entryId, file, fileIndex);
+      assetCount += await processFile(
+        submission.id,
+        submissionId,
+        initialEntry.entryId,
+        file,
+        fileIndex,
+      );
     } catch (err) {
       const msg = errorMessage(err);
       console.error(`    ✗ FILE FAILED: ${msg}`);
@@ -389,14 +418,18 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
     },
   });
 
-  console.log(`\n  ${status === "success" ? "✓" : "⚠"} DONE (${status}): ${assetCount} asset(s), ${fileErrors.length} file error(s)`);
+  console.log(
+    `\n  ${status === "success" ? "✓" : "⚠"} DONE (${status}): ${assetCount} asset(s), ${fileErrors.length} file error(s)`,
+  );
   return { submissionId, artistName, status, assetCount, fileErrors };
 }
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.error("Usage: npx tsx scripts/process-submission.ts <submissionId> [submissionId...] | --all");
+    console.error(
+      "Usage: npx tsx scripts/process-submission.ts <submissionId> [submissionId...] | --all",
+    );
     process.exit(1);
   }
 
@@ -436,7 +469,9 @@ async function main() {
   if (failed.length > 0) {
     console.log(`\nFull failures:`);
     for (const r of failed) {
-      console.log(`  - ${r.artistName} (${r.submissionId}): ${r.fatalError ?? r.fileErrors.join("; ")}`);
+      console.log(
+        `  - ${r.artistName} (${r.submissionId}): ${r.fatalError ?? r.fileErrors.join("; ")}`,
+      );
     }
   }
   console.log("═".repeat(70));

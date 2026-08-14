@@ -1,3 +1,11 @@
+/**
+ * Manual QA helper: prints signed URLs for (1) every hidden asset, so a
+ * human can eyeball whether classifyPage() correctly identified it as text
+ * rather than art, and (2) one sample per known label, for a quick label
+ * diversity check.
+ *
+ * Run: npx tsx scripts/spot-check.ts
+ */
 import { config } from "dotenv";
 import { resolve } from "node:path";
 config({ path: resolve(process.cwd(), ".env.local") });
@@ -13,7 +21,9 @@ async function main() {
   });
   for (const a of hidden) {
     const url = await getSignedR2Url(a.storagePathLarge);
-    console.log(`${a.submission.artistName} — "${a.submission.submissionTitle}" page ${a.pageNumber}`);
+    console.log(
+      `${a.submission.artistName} — "${a.submission.submissionTitle}" page ${a.pageNumber}`,
+    );
     console.log(`  ${url}`);
   }
 

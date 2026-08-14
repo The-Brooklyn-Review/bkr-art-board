@@ -8,6 +8,7 @@ import Fuse from "fuse.js";
 import "yet-another-react-lightbox/styles.css";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { getAssetLargeUrl } from "@/lib/actions/getAssetUrl";
+import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
@@ -18,24 +19,10 @@ import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 // but it doesn't defer DOM node creation or masonry's layout pass).
 const GRID_BATCH_SIZE = 60;
 
-const KNOWN_LABELS = [
-  "landscape",
-  "photography",
-  "figurative",
-  "painting/drawing",
-  "collage",
-  "abstract",
-  "multimedia",
-];
-
-function displayLabel(name: string): string {
-  return name
-    .split("/")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("/");
-}
-
-const DENSITY_BREAKPOINTS: Record<"compact" | "default" | "large", Record<string | number, number>> = {
+const DENSITY_BREAKPOINTS: Record<
+  "compact" | "default" | "large",
+  Record<string | number, number>
+> = {
   compact: { default: 7, 1600: 6, 1280: 5, 960: 4, 640: 2 },
   default: { default: 6, 1600: 5, 1280: 4, 960: 3, 640: 2 },
   large: { default: 4, 1600: 3, 1280: 3, 960: 2, 640: 1 },
@@ -54,7 +41,9 @@ function DensityToggle({
 }) {
   const sizing = prominent ? "text-sm px-3 py-2" : "text-xs px-2.5 py-1.5";
   return (
-    <div className={`flex border ${prominent ? "border-accent/60" : "border-border"} shrink-0 ${className}`}>
+    <div
+      className={`flex border ${prominent ? "border-accent/60" : "border-border"} shrink-0 ${className}`}
+    >
       {(["compact", "default", "large"] as const).map((d) => (
         <button
           key={d}
@@ -101,8 +90,8 @@ export function ArtLibraryClient({
   // window.innerWidth in the initial useState (SSR has no window), hence
   // the effect instead of an initializer.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate one-time mount read, see comment above
     if (window.innerWidth < 640) setDensity("large");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Hide the header on scroll-down, reveal it on scroll-up — same pattern
@@ -154,7 +143,8 @@ export function ArtLibraryClient({
     return results.filter((a) => {
       // Check starred filter if enabled
       if (showStarredOnly) {
-        const isStarred = typeof window !== "undefined" && localStorage.getItem(`starred-${a.id}`) === "true";
+        const isStarred =
+          typeof window !== "undefined" && localStorage.getItem(`starred-${a.id}`) === "true";
         if (!isStarred) return false;
       }
 
@@ -170,6 +160,7 @@ export function ArtLibraryClient({
   // A fresh filter/search should show the first batch again, not whatever
   // scroll position happened to reveal under the old result set.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting pagination on filter change, not worth the in-render-adjustment rewrite at this list size
     setVisibleCount(GRID_BATCH_SIZE);
   }, [search, activeLabels, showStarredOnly]);
 
@@ -206,14 +197,39 @@ export function ArtLibraryClient({
     [filtered, largeUrls],
   );
 
+  // Tracks asset IDs a prefetch has already been kicked off for (loading or
+  // done) — separate from `largeUrls` (done only), so a hover prefetch
+  // already in flight doesn't get duplicated by the open-slide effect below,
+  // and re-hovering the same card doesn't refire it.
+  const prefetchedRef = useRef<Set<string>>(new Set());
+
+  // Fetches the signed large-image URL, then preloads the actual image
+  // bytes via a detached <img> before ever touching `largeUrls` state.
+  // `slides` (below) swaps its src the moment `largeUrls` has an entry —
+  // committing only after `onload` means that swap is always into an
+  // already-decoded image the browser can paint immediately, not into a
+  // fresh network fetch the visible lightbox <img> has to wait through.
+  // Called from three places: on grid-card hover (best case — often
+  // finishes before the user even clicks), for the slide the lightbox just
+  // opened to, and for its immediate neighbors (smooths next/prev too).
+  function prefetchLargeUrl(assetId: string) {
+    if (largeUrls[assetId] || prefetchedRef.current.has(assetId)) return;
+    prefetchedRef.current.add(assetId);
+    getAssetLargeUrl(assetId).then((url) => {
+      const img = new Image();
+      img.onload = () => setLargeUrls((prev) => ({ ...prev, [assetId]: url }));
+      img.src = url;
+    });
+  }
+
   useEffect(() => {
     if (lightboxIndex === null) return;
-    const asset = filtered[lightboxIndex];
-    if (!asset || largeUrls[asset.id]) return;
-    getAssetLargeUrl(asset.id).then((url) => {
-      setLargeUrls((prev) => ({ ...prev, [asset.id]: url }));
+    [lightboxIndex - 1, lightboxIndex, lightboxIndex + 1].forEach((i) => {
+      const asset = filtered[i];
+      if (asset) prefetchLargeUrl(asset.id);
     });
-  }, [lightboxIndex, filtered, largeUrls]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIndex, filtered]);
 
   const toggleLabel = (name: string) => {
     setActiveLabels((prev) => {
@@ -289,19 +305,20 @@ export function ArtLibraryClient({
         }`}
       >
         <div className="flex items-start justify-between gap-3">
-          <div>
+          {/* Title + count sit on one baseline-aligned line, wrapping to
+              their own stacked lines only if they don't fit (narrow
+              phones) — flex-wrap handles that without a breakpoint split. */}
+          <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
             <h1 className="font-[family-name:var(--font-display)] text-xl sm:text-2xl text-text">
               Visual Arts Library
             </h1>
-            <p className="text-xs text-text-muted mt-1 uppercase tracking-wide">
+            <p className="text-xs text-text-muted uppercase tracking-wide">
               {submissionCount} submissions · {assets.length} artworks
             </p>
           </div>
-          {/* Same control as the one further down, just relocated + sized
-              up for mobile — top-right is the natural place to look for a
-              view option, and small/medium were easy to miss down in the
-              filter row. */}
-          <DensityToggle density={density} setDensity={setDensity} prominent className="sm:hidden" />
+          {/* Always opposite the title, at every breakpoint — matches
+              where this control already sat on mobile. */}
+          <DensityToggle density={density} setDensity={setDensity} prominent />
         </div>
 
         <div className="mt-3 space-y-2 sm:space-y-0 sm:mt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
@@ -335,7 +352,12 @@ export function ArtLibraryClient({
             ))}
           </div>
 
-          <div className="relative w-full sm:w-64 sm:ml-auto">
+          {/* flex-1 + min-w-64: takes only the room left after the pills
+              when it fits on their row, but once that's under 256px it
+              wraps to its own line and, alone there, flex-1 stretches it
+              to that line's full width — no separate breakpoint rule
+              needed for the "dropped to its own row" case. */}
+          <div className="relative w-full sm:flex-1 sm:min-w-64">
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
@@ -354,8 +376,6 @@ export function ArtLibraryClient({
               </button>
             )}
           </div>
-
-          <DensityToggle density={density} setDensity={setDensity} className="hidden sm:flex" />
         </div>
 
         {filtered.length !== assets.length && (
@@ -378,7 +398,12 @@ export function ArtLibraryClient({
               columnClassName="pl-4 bg-clip-padding"
             >
               {visibleAssets.map((asset, i) => (
-                <ArtCard key={asset.id} asset={asset} onOpen={() => openAsset(i)} />
+                <ArtCard
+                  key={asset.id}
+                  asset={asset}
+                  onOpen={() => openAsset(i)}
+                  onHoverIntent={() => prefetchLargeUrl(asset.id)}
+                />
               ))}
             </Masonry>
             {/* Reveals the next batch when scrolled near — rootMargin gives

@@ -58,9 +58,7 @@ async function main() {
   console.log(`✓ Download succeeded (${downloaded.length} bytes).`);
 
   if (downloaded !== CONTENT) {
-    throw new Error(
-      `Content mismatch!\n  expected: ${CONTENT}\n  got:      ${downloaded}`,
-    );
+    throw new Error(`Content mismatch!\n  expected: ${CONTENT}\n  got:      ${downloaded}`);
   }
   console.log("✓ Byte-for-byte match confirmed.");
 

@@ -14,10 +14,7 @@ const execFileAsync = promisify(execFile);
  * never runs on Vercel. See scripts/test-r2.ts-style ground-truth check:
  * confirmed working via `which pdftoppm` before this module was written.
  */
-export async function renderPdfPages(
-  pdfBuffer: Buffer,
-  dpi = 220,
-): Promise<Buffer[]> {
+export async function renderPdfPages(pdfBuffer: Buffer, dpi = 220): Promise<Buffer[]> {
   const dir = await mkdtemp(join(tmpdir(), "tbr-pdf-"));
   const inputPath = join(dir, "input.pdf");
   const outputPrefix = join(dir, "page");
@@ -25,13 +22,7 @@ export async function renderPdfPages(
   try {
     await writeFile(inputPath, pdfBuffer);
 
-    await execFileAsync("pdftoppm", [
-      "-jpeg",
-      "-r",
-      String(dpi),
-      inputPath,
-      outputPrefix,
-    ]);
+    await execFileAsync("pdftoppm", ["-jpeg", "-r", String(dpi), inputPath, outputPrefix]);
 
     const files = (await readdir(dir))
       .filter((f) => f.startsWith("page") && f.endsWith(".jpg"))
