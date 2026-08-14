@@ -56,7 +56,7 @@ body {
  * one CSS-native, no-JS source of truth for both, so they can't disagree.
  */
 :root {
-  --lightbox-footer-reserve: min(34vh, 280px);
+  --lightbox-footer-reserve: min(38vh, 320px);
 }
 @media (min-width: 640px) {
   :root {
