@@ -62,6 +62,14 @@ async function fetchImageAsBase64(url: string, retries: number = 3): Promise<str
   });
 }
 
+// Sanitize title/artist to avoid JSON parsing issues with special chars
+function sanitizeForPrompt(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\") // Escape backslashes first
+    .replace(/"/g, '\\"') // Escape quotes
+    .replace(/\n/g, " "); // Remove newlines
+}
+
 async function tagArtwork(
   assetId: string,
   imageBase64: string,
@@ -70,10 +78,14 @@ async function tagArtwork(
   coverLetter: string,
 ): Promise<{ tags: TagResult; tokens: { input: number; output: number } }> {
   const textContext = coverLetter.slice(0, 1500) || "(no artist statement)";
+  const safeArtist = sanitizeForPrompt(artistName);
+  const safeTitle = sanitizeForPrompt(title);
+  let totalTokens = { input: 0, output: 0 };
 
-  const response = await client.messages.create({
+  // Step 1: Vision analysis only (higher max_tokens for vision)
+  const visionResponse = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1200,
+    max_tokens: 1500,
     messages: [
       {
         role: "user",
@@ -88,68 +100,98 @@ async function tagArtwork(
           },
           {
             type: "text",
-            text: `Analyze this artwork by ${artistName}: "${title}"
+            text: `Analyze the visual elements of this artwork: "${safeTitle}"
 
-Artist's statement (first 1500 chars):
-${textContext}
-
-Return ONLY valid JSON with these exact fields:
+Return ONLY valid JSON with these exact fields (vision analysis only):
 {
   "visionConcrete": ["medium/technique", "subject matter", "composition", "style", "color palette"],
   "visionInterpretive": ["mood", "aesthetic", "what the image evokes", "visual themes", "feeling"],
-  "dominantColors": ["actual color names visible in artwork", "e.g. cadmium red, ultramarine"],
-  "subjects": ["what's depicted - be specific", "e.g. sleeping figures, power lines, collage fragments"],
-  "textThemes": ["conceptual ideas from artist statement", "recurring themes", "artist's intent", "movement/tradition"],
-  "combined": ["flattened deduplicated list of all tags for search"]
+  "dominantColors": ["actual color names visible", "e.g. cadmium red, ultramarine"]
 }
 
-Be specific. Vision tags from image analysis. Text tags from artist's stated concepts/themes.`,
+Be specific. Only analyze what you see visually.`,
           },
         ],
       },
     ],
   });
 
-  const content = response.content[0];
-  if (content.type !== "text") {
-    throw new Error("Unexpected response type from Claude");
-  }
+  totalTokens.input += visionResponse.usage.input_tokens;
+  totalTokens.output += visionResponse.usage.output_tokens;
 
-  // Strip markdown code blocks if present
-  let jsonText = content.text.trim();
+  // Step 2: Text analysis only (artist statement themes)
+  const textResponse = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 800,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Artwork: "${safeTitle}" by ${safeArtist}
 
-  // Find JSON content between code blocks
-  const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonText = jsonMatch[1].trim();
-  } else if (jsonText.startsWith("```json")) {
-    jsonText = jsonText.slice(7);
-  } else if (jsonText.startsWith("```")) {
-    jsonText = jsonText.slice(3);
-  }
-  if (jsonText.endsWith("```")) {
-    jsonText = jsonText.slice(0, -3);
-  }
-  jsonText = jsonText.trim();
+Artist's statement:
+${sanitizeForPrompt(textContext)}
 
-  // Try to fix truncated JSON by finding the last valid closing brace
-  let tags: TagResult;
-  try {
-    tags = JSON.parse(jsonText);
-  } catch (e) {
-    // If parsing fails, try to find and close at the last valid brace
-    const lastBrace = jsonText.lastIndexOf("}");
-    if (lastBrace > 0) {
-      const truncated = jsonText.slice(0, lastBrace + 1);
-      try {
-        tags = JSON.parse(truncated);
-      } catch (e2) {
-        throw new Error(`JSON parse failed: ${(e as Error).message}`);
-      }
-    } else {
-      throw new Error(`JSON parse failed: ${(e as Error).message}`);
+Extract conceptual themes and artist's intent. Return ONLY valid JSON:
+{
+  "subjects": ["what's depicted based on context", "e.g. sleeping figures, power lines, collage fragments"],
+  "textThemes": ["conceptual ideas from statement", "recurring themes", "artist's intent", "movement/tradition"]
+}`,
+          },
+        ],
+      },
+    ],
+  });
+
+  totalTokens.input += textResponse.usage.input_tokens;
+  totalTokens.output += textResponse.usage.output_tokens;
+
+  // Parse both responses
+  const parseJSON = (text: string) => {
+    let jsonText = text.trim();
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1].trim();
+    } else if (jsonText.startsWith("```")) {
+      jsonText = jsonText.slice(3).replace(/```$/, "");
     }
+    jsonText = jsonText.trim();
+
+    try {
+      return JSON.parse(jsonText);
+    } catch (e) {
+      const lastBrace = jsonText.lastIndexOf("}");
+      if (lastBrace > 0) {
+        return JSON.parse(jsonText.slice(0, lastBrace + 1));
+      }
+      throw e;
+    }
+  };
+
+  const visionContent = visionResponse.content[0];
+  if (visionContent.type !== "text") {
+    throw new Error("Unexpected vision response type");
   }
+
+  const textContent = textResponse.content[0];
+  if (textContent.type !== "text") {
+    throw new Error("Unexpected text response type");
+  }
+
+  const visionTags = parseJSON(visionContent.text);
+  const textTags = parseJSON(textContent.text);
+
+  // Merge vision and text analysis results
+  const tags: TagResult = {
+    visionConcrete: visionTags.visionConcrete || [],
+    visionInterpretive: visionTags.visionInterpretive || [],
+    dominantColors: visionTags.dominantColors || [],
+    subjects: textTags.subjects || [],
+    textThemes: textTags.textThemes || [],
+    combined: [], // Will be populated below
+  };
 
   // Ensure combined is a flattened, deduplicated, sorted list
   const allTags = [
@@ -163,10 +205,7 @@ Be specific. Vision tags from image analysis. Text tags from artist's stated con
 
   return {
     tags,
-    tokens: {
-      input: response.usage.input_tokens,
-      output: response.usage.output_tokens,
-    },
+    tokens: totalTokens,
   };
 }
 
