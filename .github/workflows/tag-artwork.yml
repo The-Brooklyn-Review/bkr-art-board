@@ -1,0 +1,35 @@
+name: Tag New Artwork
+
+on:
+  schedule:
+    # First day of every 3 months at midnight UTC
+    - cron: '0 0 1 1,4,7,10 *'
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tag untagged artworks
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npx tsx scripts/tag-all-artwork.ts
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Artwork tagging completed successfully"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Artwork tagging failed"
+          exit 1
