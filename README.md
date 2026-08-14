@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TBR Art Board
 
-## Getting Started
+Internal review tool for The Brooklyn Review's art submissions. Imports submissions from Submittable, renders and classifies every page/image, and gives editors a fast grid + lightbox for reviewing, tagging, and selecting work.
 
-First, run the development server:
+## Local setup
 
 ```bash
+npm install
+cp .env.local.example .env.local   # fill in the values — see docs/OPERATIONS.md
+npx prisma generate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and log in with `APP_PASSWORD`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To browse the already-imported library you only need the Postgres and R2 credentials plus `APP_PASSWORD` — Submittable and Anthropic credentials are only needed for the import and tagging scripts. See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for the full environment variable reference.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+```bash
+npm run dev           # start the dev server
+npm run build          # production build
+npm run test           # run the test suite (vitest)
+npm run lint            # eslint
+npm run format:check    # prettier --check
+npx tsx scripts/process-submission.ts   # import from Submittable (mutating)
+npx tsx scripts/tag-all-artwork.ts      # run auto-tagging (mutating)
+```
 
-To learn more about Next.js, take a look at the following resources:
+Full script reference, including which ones are read-only vs. mutating and what each one does, is in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how data flows from Submittable through storage to the review UI, and how the data model is organized.
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — running scripts, the two scheduled GitHub Actions workflows, troubleshooting, environment variables.
+- [`docs/TAGGING.md`](docs/TAGGING.md) — the quarterly Claude API auto-tagging job: schedule, cost, scope, and how to run it manually.
 
-## Deploy on Vercel
+## Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js (App Router) · TypeScript · Prisma + Supabase Postgres · Cloudflare R2 · Claude API (tagging) · Vitest
