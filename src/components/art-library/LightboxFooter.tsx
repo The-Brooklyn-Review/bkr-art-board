@@ -28,6 +28,9 @@ function ActionLinks({
   thumbnailSet,
   onSetThumbnail,
   onHide,
+  onPublish,
+  publishPending = false,
+  published = false,
   stacked = false,
 }: {
   asset: LibraryAsset;
@@ -35,10 +38,20 @@ function ActionLinks({
   thumbnailSet: boolean;
   onSetThumbnail: () => void;
   onHide: () => void;
+  onPublish: () => void;
+  publishPending?: boolean;
+  published?: boolean;
   stacked?: boolean;
 }) {
   return (
     <div className={stacked ? "flex flex-col gap-2.5 items-start" : "flex gap-4 items-center flex-wrap"}>
+      <button
+        onClick={onPublish}
+        disabled={isPending || publishPending || published}
+        className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50"
+      >
+        {published ? "✓ Published" : publishPending ? "Publishing…" : "Mark as Published"}
+      </button>
       {asset.submittableUrl && (
         <a
           href={asset.submittableUrl}
@@ -65,14 +78,14 @@ function ActionLinks({
       <button
         onClick={onSetThumbnail}
         disabled={isPending || thumbnailSet}
-        className="text-xs text-text-muted underline hover:text-text disabled:opacity-50"
+        className="text-sm text-text-muted underline hover:text-text disabled:opacity-50 py-1"
       >
         {thumbnailSet ? "✓ Set as thumbnail" : "Set as submission thumbnail"}
       </button>
       <button
         onClick={onHide}
         disabled={isPending}
-        className="text-xs text-text-muted underline hover:text-text disabled:opacity-50"
+        className="text-sm text-text-muted underline hover:text-text disabled:opacity-50 py-1"
       >
         {isPending ? "Hiding…" : "Hide this page"}
       </button>
