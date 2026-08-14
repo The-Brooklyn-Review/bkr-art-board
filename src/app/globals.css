@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/*
+ * Dark, art-first palette per plan §Design Direction. Deliberately not a
+ * light/dark toggle — this is a museum-archive tool, always dark, so
+ * artwork is the color and the UI stays out of the way.
+ *
+ * Raw values go directly in @theme (no separate :root layer) — a token
+ * referencing a :root variable of the SAME name is circular and silently
+ * resolves to nothing, which is what happened on the first pass here.
+ * Font variables are injected by next/font onto <html> as
+ * --next-font-display / --next-font-ui (named distinctly from the Tailwind
+ * token below for the same reason).
+ */
+@theme {
+  --color-bg: #0e0e0d;
+  --color-surface: #181817;
+  --color-border: #2a2a28;
+  --color-text: #ede9e2;
+  /*
+   * Warm gray, tuned to ~7:1 contrast against --color-bg (was #6b6862,
+   * ~3.5:1 — failed WCAG AA for the 11-12px captions it's used on
+   * throughout the app). Keeps the same warm hue as --color-accent so it
+   * still reads as secondary, just no longer illegible.
+   */
+  --color-text-muted: #a39c8f;
+  --color-accent: #b8956b;
+  --font-display: var(--next-font-display), Georgia, serif;
+  --font-ui: var(--next-font-ui), system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+}
+
+/* For the mobile filter-pill scroll strip — a visible scrollbar on a
+   single-row chip list reads as a bug, not an affordance. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

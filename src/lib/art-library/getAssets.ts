@@ -1,0 +1,109 @@
+import { prisma } from "@/lib/db";
+import { getSignedR2Url } from "@/lib/storage/r2";
+
+export interface LibraryAsset {
+  id: string;
+  submissionId: string;
+  thumbnailUrl: string;
+  originalUrl: string | null;
+  artistName: string | null;
+  submissionTitle: string | null;
+  coverLetter: string | null;
+  extractedText: string | null;
+  labels: { name: string; color: string | null }[];
+  assetType: string;
+  pageNumber: number | null;
+  fileIndex: number | null;
+  width: number | null;
+  height: number | null;
+  aspectRatio: number | null;
+  usedState: string;
+  localReviewRecommendation: string;
+  originalFilename: string | null;
+  submittableUrl: string | null;
+  reviewUrl: string;
+  fileCount: number;
+  pageCount: number;
+}
+
+/**
+ * All visible-in-library assets, with signed thumbnail URLs and everything
+ * the grid needs. Fetches everything in one shot rather than paginating —
+ * fine at ~212 assets per plan §26 ("For MVP, simple filtering may be
+ * fine"), filter/search happens client-side. Revisit if the library grows
+ * substantially past this.
+ *
+ * Deliberately does NOT sign largeUrl here — that used to mean signing
+ * 200+ R2 URLs nobody was about to look at. The client fetches a given
+ * asset's large URL on demand (getAssetLargeUrl) only when its lightbox
+ * slide actually opens.
+ *
+ * Deliberately does NOT fetch hidden (visibleInArtLibrary: false) assets —
+ * this view supports hiding a wrongly-visible page, but revealing a
+ * wrongly-hidden one is Phase 5's job (the Submission Review UI shows a
+ * full packet including hidden pages); pulling hidden assets in here too
+ * would be scope creep for what's meant to be the fast browsing surface.
+ */
+export async function getLibraryAssets(): Promise<LibraryAsset[]> {
+  const assets = await prisma.artAsset.findMany({
+    where: { visibleInArtLibrary: true },
+    include: {
+      submission: {
+        include: {
+          labels: { include: { label: true } },
+          files: true,
+        },
+      },
+      submissionFile: true,
+    },
+    orderBy: [{ submissionId: "asc" }, { fileIndex: "asc" }, { pageNumber: "asc" }],
+  });
+
+  const webBase = process.env.SUBMITTABLE_WEB_BASE_URL;
+
+  return Promise.all(
+    assets.map(async (asset) => {
+      const [thumbnailUrl, originalUrl] = await Promise.all([
+        getSignedR2Url(asset.storagePathThumbnail),
+        asset.submissionFile ? getSignedR2Url(asset.submissionFile.storagePathOriginal) : null,
+      ]);
+
+      return {
+        id: asset.id,
+        submissionId: asset.submissionId,
+        thumbnailUrl,
+        originalUrl,
+        artistName: asset.submission.artistName,
+        submissionTitle: asset.submission.submissionTitle,
+        coverLetter: asset.submission.coverLetter,
+        extractedText: asset.extractedText,
+        labels: asset.submission.labels.map((l) => ({
+          name: l.label.name,
+          color: l.label.color,
+        })),
+        assetType: asset.assetType,
+        pageNumber: asset.pageNumber,
+        fileIndex: asset.fileIndex,
+        width: asset.width,
+        height: asset.height,
+        aspectRatio: asset.aspectRatio,
+        usedState: asset.usedState,
+        localReviewRecommendation: asset.submission.localReviewRecommendation,
+        originalFilename: asset.submissionFile?.originalFilename ?? null,
+        // NOTE: must use submission.submittableId (Submittable's real ID),
+        // not asset.submissionId (our internal FK/UUID) — these are two
+        // different UUIDs and mixing them up produces a URL that 404s on
+        // Submittable's site. Confirmed the two actually differ in real
+        // data before fixing this (they're generated independently).
+        submittableUrl: webBase
+          ? `${webBase}/submissions/${asset.submission.submittableId}`
+          : null,
+        reviewUrl: `/submissions/${asset.submissionId}`,
+        fileCount: asset.submission.files.length,
+        pageCount: assets.filter(
+          (a) => a.submissionFileId === asset.submissionFileId && a.submissionFileId !== null,
+        ).length,
+      };
+    }),
+  );
+}

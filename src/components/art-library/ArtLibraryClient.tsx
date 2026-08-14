@@ -1,0 +1,373 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Masonry from "react-masonry-css";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
+import type { LibraryAsset } from "@/lib/art-library/getAssets";
+import { getAssetLargeUrl } from "@/lib/actions/getAssetUrl";
+import { ArtCard } from "./ArtCard";
+import { LightboxFooter } from "./LightboxFooter";
+import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
+
+// Matches the "30-60 visible cards feel manageable" density guidance —
+// also caps how many masonry items mount at once, which is the actual
+// mobile layout/DOM cost (loading="lazy" already defers network fetches,
+// but it doesn't defer DOM node creation or masonry's layout pass).
+const GRID_BATCH_SIZE = 60;
+
+const KNOWN_LABELS = [
+  "landscape",
+  "photography",
+  "figurative",
+  "painting/drawing",
+  "collage",
+  "abstract",
+  "multimedia",
+];
+
+function displayLabel(name: string): string {
+  return name
+    .split("/")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("/");
+}
+
+const DENSITY_BREAKPOINTS: Record<"compact" | "default" | "large", Record<string | number, number>> = {
+  compact: { default: 7, 1600: 6, 1280: 5, 960: 4, 640: 2 },
+  default: { default: 6, 1600: 5, 1280: 4, 960: 3, 640: 2 },
+  large: { default: 4, 1600: 3, 1280: 3, 960: 2, 640: 1 },
+};
+
+function DensityToggle({
+  density,
+  setDensity,
+  prominent = false,
+  className = "",
+}: {
+  density: "compact" | "default" | "large";
+  setDensity: (d: "compact" | "default" | "large") => void;
+  prominent?: boolean;
+  className?: string;
+}) {
+  const sizing = prominent ? "text-sm px-3 py-2" : "text-xs px-2.5 py-1.5";
+  return (
+    <div className={`flex border ${prominent ? "border-accent/60" : "border-border"} shrink-0 ${className}`}>
+      {(["compact", "default", "large"] as const).map((d) => (
+        <button
+          key={d}
+          onClick={() => setDensity(d)}
+          className={`${sizing} font-medium transition-colors ${
+            density === d ? "bg-accent text-bg" : "text-text-muted hover:text-text"
+          }`}
+          title={d}
+        >
+          {d === "compact" ? "S" : d === "default" ? "M" : "L"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ArtLibraryClient({
+  assets,
+  submissionCount,
+  initialAssetId,
+}: {
+  assets: LibraryAsset[];
+  submissionCount: number;
+  initialAssetId: string | null;
+}) {
+  const [search, setSearch] = useState("");
+  const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
+  const [density, setDensity] = useState<"compact" | "default" | "large">("default");
+  // Initial value comes from the server-rendered ?asset= param (see
+  // page.tsx) so a shared link opens straight to the right artwork.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(() => {
+    if (!initialAssetId) return null;
+    const idx = assets.findIndex((a) => a.id === initialAssetId);
+    return idx === -1 ? null : idx;
+  });
+  const [largeUrls, setLargeUrls] = useState<Record<string, string>>({});
+  const [visibleCount, setVisibleCount] = useState(GRID_BATCH_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Two columns reads as cramped on a phone-width screen — default to one
+  // artwork at a time there. Checked once on mount (not on every resize),
+  // so picking "Medium" by hand doesn't get silently reset. Can't read
+  // window.innerWidth in the initial useState (SSR has no window), hence
+  // the effect instead of an initializer.
+  useEffect(() => {
+    if (window.innerWidth < 640) setDensity("large");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Hide the header on scroll-down, reveal it on scroll-up — same pattern
+  // as most mobile content apps. Without this, the header either eats
+  // permanent screen space (sticky) or filters/search become unreachable
+  // without scrolling all the way back to the top (non-sticky).
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const lastScrollY = useRef(0);
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY;
+      setHeaderHidden(y > lastScrollY.current && y > 80);
+      lastScrollY.current = y;
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const filtered = useMemo(() => {
+    return assets.filter((a) => {
+      if (activeLabels.size > 0) {
+        const assetLabelNames = new Set(a.labels.map((l) => l.name));
+        const matchesAnyActive = [...activeLabels].some((l) => assetLabelNames.has(l));
+        if (!matchesAnyActive) return false;
+      }
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const haystack = `${a.artistName ?? ""} ${a.submissionTitle ?? ""} ${a.labels
+          .map((l) => l.name)
+          .join(" ")} ${a.extractedText ?? ""} ${a.coverLetter ?? ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [assets, search, activeLabels]);
+
+  // A fresh filter/search should show the first batch again, not whatever
+  // scroll position happened to reveal under the old result set.
+  useEffect(() => {
+    setVisibleCount(GRID_BATCH_SIZE);
+  }, [search, activeLabels]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((v) => Math.min(v + GRID_BATCH_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "800px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [filtered.length]);
+
+  const visibleAssets = filtered.slice(0, visibleCount);
+
+  // Slides still cover the FULL filtered set (not just the revealed grid
+  // batch) — lightbox next/prev navigation shouldn't be limited by how far
+  // the user has scrolled. src falls back to the thumbnail already loaded
+  // in the grid until the large image is fetched (see effect below), so
+  // opening a slide never shows a blank frame.
+  const slides = useMemo(
+    () =>
+      filtered.map((a) => ({
+        src: largeUrls[a.id] ?? a.thumbnailUrl,
+        width: a.width ?? undefined,
+        height: a.height ?? undefined,
+        asset: a,
+      })),
+    [filtered, largeUrls],
+  );
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const asset = filtered[lightboxIndex];
+    if (!asset || largeUrls[asset.id]) return;
+    getAssetLargeUrl(asset.id).then((url) => {
+      setLargeUrls((prev) => ({ ...prev, [asset.id]: url }));
+    });
+  }, [lightboxIndex, filtered, largeUrls]);
+
+  const toggleLabel = (name: string) => {
+    setActiveLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const currentAsset = lightboxIndex !== null ? filtered[lightboxIndex] : null;
+  const siblings = useMemo(() => {
+    if (!currentAsset) return [];
+    return filtered
+      .map((a, i) => ({ asset: a, index: i }))
+      .filter(({ asset }) => asset.submissionId === currentAsset.submissionId);
+  }, [filtered, currentAsset]);
+
+  // Deliberately bypasses Next's router (no router.push/replace) — this
+  // route is force-dynamic, so a real navigation would re-run the whole
+  // server fetch and re-sign 200+ thumbnail URLs on every single click
+  // through the lightbox. Raw History API just updates the address bar;
+  // state stays exactly as it already was (a plain useState). "push" adds
+  // one entry (opening a fresh asset from the grid); "replace" doesn't
+  // (browsing siblings, or closing shouldn't spam browser history).
+  function syncUrl(assetId: string | null, mode: "push" | "replace") {
+    const url = new URL(window.location.href);
+    if (assetId) url.searchParams.set("asset", assetId);
+    else url.searchParams.delete("asset");
+    const args: [Record<string, never>, string, string] = [{}, "", url.pathname + url.search];
+    if (mode === "push") window.history.pushState(...args);
+    else window.history.replaceState(...args);
+  }
+
+  function openAsset(index: number) {
+    setLightboxIndex(index);
+    syncUrl(filtered[index]?.id ?? null, "push");
+  }
+
+  function navigateToAsset(index: number) {
+    setLightboxIndex(index);
+    syncUrl(filtered[index]?.id ?? null, "replace");
+  }
+
+  function closeLightbox() {
+    setLightboxIndex(null);
+    syncUrl(null, "replace");
+  }
+
+  // Browser back/forward — the only case that can change the URL out from
+  // under this component, since our own updates above never touch it.
+  useEffect(() => {
+    function onPopState() {
+      const assetId = new URLSearchParams(window.location.search).get("asset");
+      const idx = assetId ? filtered.findIndex((a) => a.id === assetId) : -1;
+      setLightboxIndex(idx === -1 ? null : idx);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [filtered]);
+
+  return (
+    <div className="min-h-screen bg-bg text-text">
+      {/*
+        Sticky at every breakpoint, but on mobile it also slides off-screen
+        on scroll-down and back on scroll-up (headerHidden) — filters/search
+        stay reachable without permanently eating screen space. sm:translate-y-0
+        below always wins at sm+, so desktop never hides.
+      */}
+      <header
+        className={`border-b border-border px-4 py-3 sm:px-6 sm:py-5 sticky top-0 bg-bg/95 backdrop-blur-sm z-10 transition-transform duration-200 sm:translate-y-0 ${
+          headerHidden ? "-translate-y-full" : "translate-y-0"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-[family-name:var(--font-display)] text-xl sm:text-2xl text-text">
+              Visual Arts Library
+            </h1>
+            <p className="text-xs text-text-muted mt-1 uppercase tracking-wide">
+              {submissionCount} submissions · {assets.length} artworks
+            </p>
+          </div>
+          {/* Same control as the one further down, just relocated + sized
+              up for mobile — top-right is the natural place to look for a
+              view option, and small/medium were easy to miss down in the
+              filter row. */}
+          <DensityToggle density={density} setDensity={setDensity} prominent className="sm:hidden" />
+        </div>
+
+        <div className="mt-3 space-y-2 sm:space-y-0 sm:mt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+          {/* Label pills: horizontal scroll strip on mobile (was wrapping
+              into 3+ rows and eating the whole screen), wraps normally
+              from sm up. */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+            {KNOWN_LABELS.map((label) => (
+              <button
+                key={label}
+                onClick={() => toggleLabel(label)}
+                className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
+                  activeLabels.has(label)
+                    ? "bg-accent text-bg border-accent"
+                    : "border-border text-text-muted hover:border-accent hover:text-text"
+                }`}
+              >
+                {displayLabel(label)}
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="text"
+            placeholder="Search artist, title, label…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full sm:w-64 sm:ml-auto bg-surface border border-border text-sm text-text px-3 py-1.5 outline-none focus:border-accent transition-colors"
+          />
+
+          <DensityToggle density={density} setDensity={setDensity} className="hidden sm:flex" />
+        </div>
+
+        {filtered.length !== assets.length && (
+          <p className="text-xs text-text-muted mt-2">
+            Showing {filtered.length} of {assets.length} artworks
+          </p>
+        )}
+      </header>
+
+      <main className="px-6 py-6">
+        {filtered.length === 0 ? (
+          <p className="text-text-muted text-sm py-12 text-center">
+            No artworks match the current filters.
+          </p>
+        ) : (
+          <>
+            <Masonry
+              breakpointCols={DENSITY_BREAKPOINTS[density]}
+              className="flex -ml-4 w-auto"
+              columnClassName="pl-4 bg-clip-padding"
+            >
+              {visibleAssets.map((asset, i) => (
+                <ArtCard key={asset.id} asset={asset} onOpen={() => openAsset(i)} />
+              ))}
+            </Masonry>
+            {/* Reveals the next batch when scrolled near — rootMargin gives
+                it a head start so more cards are ready before the user
+                actually hits the bottom. */}
+            {visibleCount < filtered.length && <div ref={sentinelRef} className="h-1" />}
+          </>
+        )}
+      </main>
+
+      <Lightbox
+        open={lightboxIndex !== null}
+        close={closeLightbox}
+        index={lightboxIndex ?? 0}
+        slides={slides}
+        plugins={[Zoom]}
+        on={{ view: ({ index }) => navigateToAsset(index) }}
+        zoom={{ maxZoomPixelRatio: 3, scrollToZoom: true }}
+        render={{
+          slideFooter: ({ slide }) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const asset = (slide as any).asset as LibraryAsset | undefined;
+            if (!asset) return null;
+            return (
+              <LightboxFooter
+                key={asset.id}
+                asset={asset}
+                siblings={siblings}
+                onJumpToSibling={navigateToAsset}
+                onHidden={closeLightbox}
+              />
+            );
+          },
+        }}
+        styles={{
+          container: { backgroundColor: "rgba(14, 14, 13, 0.97)" },
+          // Reserve space so the custom slideFooter overlay never covers the
+          // artwork — the image's max-height shrinks to fit above this band
+          // instead of being obscured by whatever renders on top of it.
+          slide: { paddingBottom: LIGHTBOX_FOOTER_MAX_HEIGHT },
+        }}
+      />
+    </div>
+  );
+}

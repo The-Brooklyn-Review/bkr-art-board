@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model SubmittableSubmission {
+  id                        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submittableId             String            @unique @map("submittable_id")
+  submittableUrl            String?           @map("submittable_url")
+  projectId                 String?           @map("project_id")
+  projectName               String?           @map("project_name")
+  formId                    String?           @map("form_id")
+  formName                  String?           @map("form_name")
+  artistName                String?           @map("artist_name")
+  artistEmail               String?           @map("artist_email")
+  artistPhone               String?           @map("artist_phone")
+  artistWebsite             String?           @map("artist_website")
+  submissionTitle           String?           @map("submission_title")
+  coverLetter               String?           @map("cover_letter")
+  artistStatement           String?           @map("artist_statement")
+  officialStatus            String?           @map("official_status")
+  localReviewRecommendation String            @default("unreviewed") @map("local_review_recommendation")
+  needsSubmittableUpdate    Boolean           @default(false) @map("needs_submittable_update")
+  submittableUpdateDone     Boolean           @default(false) @map("submittable_update_done")
+  submittableUpdateDoneAt   DateTime?         @map("submittable_update_done_at") @db.Timestamptz(6)
+  thumbnailAssetId          String?           @map("thumbnail_asset_id") @db.Uuid
+  rawSubmissionJson         Json?             @map("raw_submission_json")
+  rawEntriesJson            Json?             @map("raw_entries_json")
+  syncStatus                String            @default("pending") @map("sync_status")
+  processingStatus          String            @default("pending") @map("processing_status")
+  processingError           String?           @map("processing_error")
+  lastSyncedAt              DateTime?         @map("last_synced_at") @db.Timestamptz(6)
+  createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  assets                    ArtAsset[]        @relation("SubmissionAssets")
+  actions                   ReviewAction[]
+  notes                     ReviewNote[]
+  files                     SubmissionFile[]
+  labels                    SubmissionLabel[]
+  thumbnailAsset            ArtAsset?         @relation("SubmissionThumbnail", fields: [thumbnailAssetId], references: [id], onUpdate: NoAction, map: "fk_thumbnail_asset")
+
+  @@index([syncStatus, processingStatus], map: "idx_submittable_submissions_status")
+  @@map("submittable_submissions")
+}
+
+model SubmittableLabel {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submittableLabelId String            @unique @map("submittable_label_id")
+  name               String
+  color              String?
+  rawJson            Json?             @map("raw_json")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  submissions        SubmissionLabel[]
+
+  @@map("submittable_labels")
+}
+
+model SubmissionLabel {
+  submissionId String                @map("submission_id") @db.Uuid
+  labelId      String                @map("label_id") @db.Uuid
+  source       String                @default("submittable")
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  label        SubmittableLabel      @relation(fields: [labelId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  submission   SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([submissionId, labelId])
+  @@index([labelId], map: "idx_submission_labels_label_id")
+  @@map("submission_labels")
+}
+
+model SubmissionFile {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId        String                @map("submission_id") @db.Uuid
+  entryId             String                @map("entry_id")
+  fileId              String                @map("file_id")
+  fieldId             String?               @map("field_id")
+  originalFilename    String?               @map("original_filename")
+  mimeType            String?               @map("mime_type")
+  fileSizeBytes       BigInt?               @map("file_size_bytes")
+  storagePathOriginal String                @map("storage_path_original")
+  downloadedAt        DateTime?             @map("downloaded_at") @db.Timestamptz(6)
+  processingStatus    String                @default("pending") @map("processing_status")
+  processingError     String?               @map("processing_error")
+  rawFileJson         Json?                 @map("raw_file_json")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  assets              ArtAsset[]
+  submission          SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([submissionId, entryId, fileId])
+  @@index([submissionId], map: "idx_submission_files_submission_id")
+  @@map("submission_files")
+}
+
+model ArtAsset {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId         String                  @map("submission_id") @db.Uuid
+  submissionFileId     String?                 @map("submission_file_id") @db.Uuid
+  assetType            String                  @map("asset_type")
+  pageNumber           Int?                    @map("page_number")
+  fileIndex            Int?                    @map("file_index")
+  storagePathLarge     String                  @map("storage_path_large")
+  storagePathThumbnail String                  @map("storage_path_thumbnail")
+  width                Int?                    @map("width")
+  height               Int?                    @map("height")
+  aspectRatio          Float?                  @map("aspect_ratio")
+  extractedText        String?                 @map("extracted_text")
+  pageType             String                  @default("unknown") @map("page_type")
+  visibleInArtLibrary  Boolean                 @default(true) @map("visible_in_art_library")
+  localTitle           String?                 @map("local_title")
+  medium               String?                 @map("medium")
+  dimensions           String?                 @map("dimensions")
+  year                 String?                 @map("year")
+  usedState            String                  @default("available") @map("used_state")
+  rawProcessingJson    Json?                   @map("raw_processing_json")
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  submissionFile       SubmissionFile?         @relation(fields: [submissionFileId], references: [id], onUpdate: NoAction)
+  submission           SubmittableSubmission   @relation("SubmissionAssets", fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  actions              ReviewAction[]
+  notes                ReviewNote[]
+  thumbnailFor         SubmittableSubmission[] @relation("SubmissionThumbnail")
+
+  @@index([pageType], map: "idx_art_assets_page_type")
+  @@index([submissionId], map: "idx_art_assets_submission_id")
+  @@map("art_assets")
+}
+
+model ReviewNote {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId String                @map("submission_id") @db.Uuid
+  artAssetId   String?               @map("art_asset_id") @db.Uuid
+  userId       String?               @map("user_id") @db.Uuid
+  note         String
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  artAsset     ArtAsset?             @relation(fields: [artAssetId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  submission   SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("review_notes")
+}
+
+model ReviewAction {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId  String                @map("submission_id") @db.Uuid
+  artAssetId    String?               @map("art_asset_id") @db.Uuid
+  userId        String?               @map("user_id") @db.Uuid
+  actionType    String                @map("action_type")
+  previousValue Json?                 @map("previous_value")
+  newValue      Json?                 @map("new_value")
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  artAsset      ArtAsset?             @relation(fields: [artAssetId], references: [id], onUpdate: NoAction)
+  submission    SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("review_actions")
+}
