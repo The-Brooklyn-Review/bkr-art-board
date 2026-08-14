@@ -14,12 +14,13 @@ function sha256(token: string) {
 
 function activeLink(overrides: Record<string, unknown> = {}) {
   return {
+    artAssetId: "asset-1",
     revokedAt: null,
     expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     artAsset: {
       visibleInArtLibrary: true,
       usedState: "available",
-      storagePathLarge: "path/large.webp",
+      storagePathThumbnail: "path/thumb.webp",
       submission: { artistName: "Jane Doe", submissionTitle: "Piece" },
     },
     ...overrides,
@@ -36,9 +37,10 @@ describe("resolveShareToken", () => {
   it("resolves a valid, active link", async () => {
     mockPrisma.sharedArtworkLink.findUnique.mockResolvedValue(activeLink());
     await expect(resolveShareToken("tok")).resolves.toEqual({
+      assetId: "asset-1",
       artistName: "Jane Doe",
       submissionTitle: "Piece",
-      storagePathLarge: "path/large.webp",
+      storagePathThumbnail: "path/thumb.webp",
     });
   });
 

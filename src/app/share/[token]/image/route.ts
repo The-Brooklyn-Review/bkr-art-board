@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     return new NextResponse("Not found", { status: 404 });
   }
 
-  const { body, contentType } = await fetchR2Object(resolved.storagePathLarge);
+  const { body, contentType } = await fetchR2Object(resolved.storagePathThumbnail);
 
   return new NextResponse(new Uint8Array(body), {
     headers: {

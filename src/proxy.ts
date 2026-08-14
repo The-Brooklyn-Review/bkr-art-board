@@ -33,7 +33,12 @@ export function proxy(request: NextRequest) {
   const cookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (cookie !== expectedAuthCookieValue()) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
+    // pathname alone drops query strings — e.g. /art-library?asset=<id>
+    // (the exact deep link a share page sends someone to) would silently
+    // land back on the plain grid after login, with the target artwork
+    // lost. request.nextUrl.search carries the leading "?" already, or is
+    // "" when there's nothing to carry.
+    loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { resolveShareToken } from "@/lib/sharePreview";
+import { SharePreviewViewer } from "./SharePreviewViewer";
 
 // Re-validated on every request — a link revoked (replaced) or expired a
 // second ago must stop resolving immediately, not whenever a cache expires.
@@ -37,25 +38,17 @@ export async function generateMetadata({
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const { artistName, submissionTitle } = await getShare(token);
+  const { assetId, artistName, submissionTitle } = await getShare(token);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-bg px-6 py-12">
-      <div className="w-full max-w-2xl flex flex-col items-center text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/share/${token}/image`}
-          alt={submissionTitle || "Shared artwork"}
-          className="max-w-full max-h-[70vh] object-contain border border-border"
-        />
-        <p className="font-[family-name:var(--font-display)] text-2xl text-text mt-6">
-          {submissionTitle || "Untitled"}
-        </p>
-        {artistName && <p className="text-text-muted mt-1">By {artistName}</p>}
-        <p className="text-xs text-text-muted mt-8 uppercase tracking-wide">
-          Shared from The Brooklyn Review Art Board
-        </p>
-      </div>
+    <main className="min-h-screen bg-bg">
+      <SharePreviewViewer
+        imageUrl={`/share/${token}/image`}
+        alt={submissionTitle || "Shared artwork"}
+        artistName={artistName}
+        submissionTitle={submissionTitle}
+        assetId={assetId}
+      />
     </main>
   );
 }

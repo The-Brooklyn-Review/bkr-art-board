@@ -2,15 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Masonry from "react-masonry-css";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import Fuse from "fuse.js";
-import "yet-another-react-lightbox/styles.css";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { getAssetLargeUrl } from "@/lib/actions/getAssetUrl";
 import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
+import { ZoomableLightbox } from "./ZoomableLightbox";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 
 // Matches the "30-60 visible cards feel manageable" density guidance —
@@ -414,14 +412,12 @@ export function ArtLibraryClient({
         )}
       </main>
 
-      <Lightbox
+      <ZoomableLightbox
         open={lightboxIndex !== null}
         close={closeLightbox}
         index={lightboxIndex ?? 0}
         slides={slides}
-        plugins={[Zoom]}
         on={{ view: ({ index }) => navigateToAsset(index) }}
-        zoom={{ maxZoomPixelRatio: 3, scrollToZoom: true }}
         render={{
           slideFooter: ({ slide }) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -439,7 +435,6 @@ export function ArtLibraryClient({
           },
         }}
         styles={{
-          container: { backgroundColor: "rgba(14, 14, 13, 0.97)" },
           // Reserve space so the custom slideFooter overlay never covers the
           // artwork — the image's max-height shrinks to fit above this band
           // instead of being obscured by whatever renders on top of it.

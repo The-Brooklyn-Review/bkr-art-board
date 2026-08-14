@@ -17,9 +17,15 @@ export function hashShareToken(token: string): string {
 }
 
 export interface ResolvedShareAsset {
+  assetId: string;
   artistName: string | null;
   submissionTitle: string | null;
-  storagePathLarge: string;
+  // Deliberately the cropped thumbnail (artwork region only, 1000px,
+  // q82 webp — see processImageVariants in scripts/process-submission.ts),
+  // not the full uncropped "large" image the authenticated lightbox shows.
+  // Good enough for an embed and a light zoom; anyone who wants the real
+  // full-resolution image clicks through to the logged-in viewer.
+  storagePathThumbnail: string;
 }
 
 /**
@@ -43,8 +49,9 @@ export async function resolveShareToken(token: string): Promise<ResolvedShareAss
   if (!link.artAsset.visibleInArtLibrary || link.artAsset.usedState === "do_not_use") return null;
 
   return {
+    assetId: link.artAssetId,
     artistName: link.artAsset.submission.artistName,
     submissionTitle: link.artAsset.submission.submissionTitle,
-    storagePathLarge: link.artAsset.storagePathLarge,
+    storagePathThumbnail: link.artAsset.storagePathThumbnail,
   };
 }
