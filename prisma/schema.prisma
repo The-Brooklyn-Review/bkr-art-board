@@ -8,7 +8,11 @@
 //      thumbnails, extracted text, and page classification.
 //   3. Local review state (mutable, this app's own workflow) — the
 //      recommendation/visibility/note/audit fields layered on top of 1 and
-//      2, written only via src/lib/actions/mutations.ts.
+//      2, written via src/lib/actions/mutations.ts.
+// SharedArtworkLink doesn't fit any of the three tiers above — it's a
+// standalone, revocable public-sharing artifact (see its own doc comment
+// and docs/ARCHITECTURE.md#sharing-an-artwork-outside-the-tool), written
+// via src/lib/actions/sharePreview.ts.
 //
 // None of these "enum-like" string fields are real Postgres/Prisma enums —
 // validity is enforced only in TypeScript. Valid values, confirmed against
@@ -178,10 +182,34 @@ model ArtAsset {
   actions              ReviewAction[]
   notes                ReviewNote[]
   thumbnailFor         SubmittableSubmission[] @relation("SubmissionThumbnail")
+  sharedLink           SharedArtworkLink?
 
   @@index([pageType], map: "idx_art_assets_page_type")
   @@index([submissionId], map: "idx_art_assets_submission_id")
   @@map("art_assets")
+}
+
+/// A revocable, expiring public link exposing exactly one ArtAsset's image
+/// plus its artist name and piece title, reachable without login — see
+/// src/proxy.ts's exemption for /share and src/lib/sharePreview.ts for the
+/// single authorization decision both /share/[token] and its image route
+/// apply. Created explicitly via "Copy share link" in the review UI, never
+/// automatically. One row per asset (@unique on artAssetId): creating a new
+/// link for an asset that already has one overwrites it in place, so the
+/// old token stops resolving immediately — there is no separate "revoke"
+/// action, just "share again". Only tokenHash is stored, never the raw
+/// token — it exists in plaintext only in the URL handed to the user, so a
+/// database leak alone can't produce a usable link.
+model SharedArtworkLink {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  artAssetId String    @unique @map("art_asset_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  artAsset   ArtAsset  @relation(fields: [artAssetId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("shared_artwork_links")
 }
 
 /// A free-text note an editor leaves on a submission (optionally scoped to

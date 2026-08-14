@@ -51,3 +51,16 @@ export async function getSignedR2Url(key: string, expiresInSeconds = 21600): Pro
     expiresIn: expiresInSeconds,
   });
 }
+
+/**
+ * Fetches object bytes directly, for the one place a signed R2 URL should
+ * never be handed out: the public share-link image route. That route's
+ * only authorization check is a token hash on each request — a signed URL
+ * would let the image keep loading for its own multi-hour lifetime even
+ * after the link is replaced/expired, undermining that check entirely.
+ */
+export async function fetchR2Object(key: string): Promise<{ body: Buffer; contentType?: string }> {
+  const result = await client().send(new GetObjectCommand({ Bucket: BUCKET(), Key: key }));
+  const bytes = await result.Body!.transformToByteArray();
+  return { body: Buffer.from(bytes), contentType: result.ContentType };
+}

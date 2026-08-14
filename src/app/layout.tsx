@@ -18,10 +18,27 @@ const sourceSans = Source_Sans_3({
   subsets: ["latin"],
 });
 
+// Production domain, for resolving the og:image/apple-icon URLs to
+// absolute — without metadataBase, Next resolves them against
+// localhost and link-preview bots get a dead image URL.
+const metadataBase = new URL("https://tbr-art-board.vercel.app");
+
 export const metadata: Metadata = {
+  metadataBase,
   title: "TBR Art Board",
   description: "Internal art review tool for The Brooklyn Review",
   robots: { index: false, follow: false },
+  openGraph: {
+    title: "TBR Art Board",
+    description: "Internal art review tool for The Brooklyn Review",
+    siteName: "TBR Art Board",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TBR Art Board",
+    description: "Internal art review tool for The Brooklyn Review",
+  },
 };
 
 export default function RootLayout({

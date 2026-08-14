@@ -39,6 +39,7 @@ Two GitHub Actions cron jobs, both defined in `.github/workflows/`:
 - **Images not loading in the UI** — check that `CLOUDFLARE_R2_*` env vars are correct and that the signed URL hasn't expired (they're generated fresh per request, so this usually points at an R2 credentials or bucket-name problem, not expiry). `test-r2.ts` is the fastest way to confirm R2 connectivity in isolation.
 - **DB connection errors** — confirm `DATABASE_URL`/`DIRECT_URL` are current (Supabase connection strings can change if the project is paused and resumed) and that the free-tier project isn't paused. `test-db.ts` isolates this from everything else.
 - **Supabase project auto-paused** — free-tier Supabase projects pause after 7 days with no activity. The keepalive workflow exists specifically to prevent this; if it's been disabled or is failing, the project may need to be manually resumed from the Supabase dashboard.
+- **A share link 404s unexpectedly** — this is by design whenever the link is invalid, expired (7 days), or was superseded by a newer share of the same artwork (there's no separate "revoke"; sharing again just replaces the old link). It's also what happens if the artwork was hidden or marked `do_not_use` after the link was created — hiding a piece kills every outstanding share link for it immediately. See [`ARCHITECTURE.md`](./ARCHITECTURE.md#sharing-an-artwork-outside-the-tool). The fix is just to share again from the lightbox.
 
 ## Environment variables
 

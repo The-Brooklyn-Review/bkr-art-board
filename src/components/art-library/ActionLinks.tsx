@@ -6,6 +6,9 @@ export function ActionLinks({
   isStarred,
   onToggleStar,
   onHide,
+  onShare,
+  sharePending = false,
+  shareCopied = false,
   onPublish,
   publishPending = false,
   published = false,
@@ -15,11 +18,16 @@ export function ActionLinks({
   isStarred: boolean;
   onToggleStar: () => void;
   onHide: () => void;
+  onShare: () => void;
+  sharePending?: boolean;
+  shareCopied?: boolean;
   onPublish: () => void;
   publishPending?: boolean;
   published?: boolean;
 }) {
-  // Desktop: [Star] [Open in Submittable] [Mark as Published] | tertiary links
+  // Desktop: [Star] [Share link] [Open in Submittable] [Mark as Published] | tertiary links
+  // Share is a headline action (deliberately more prominent than Publish),
+  // so it gets the same solid-accent treatment as Open in Submittable.
   return (
     <div className="flex items-center gap-3 text-sm flex-wrap">
       <button
@@ -31,12 +39,20 @@ export function ActionLinks({
         {isStarred ? "⭐" : "☆"}
       </button>
 
+      <button
+        onClick={onShare}
+        disabled={sharePending}
+        className="font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50"
+      >
+        {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
+      </button>
+
       {asset.submittableUrl && (
         <a
           href={asset.submittableUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
+          className="font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover"
         >
           Open in Submittable
         </a>

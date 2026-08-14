@@ -3,13 +3,13 @@
 import { useState, useTransition, useEffect } from "react";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
+import { createShareLink } from "@/lib/actions/sharePreview";
 import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 import { ActionLinks } from "./ActionLinks";
 import { ConfirmModal } from "./ConfirmModal";
 import { CoverLetterModal } from "./CoverLetterModal";
 import { MoreActionsSheet } from "./MoreActionsSheet";
-import { CollapsibleText } from "./CollapsibleText";
 
 export function LightboxFooter({
   asset,
@@ -30,6 +30,8 @@ export function LightboxFooter({
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
   const [published, setPublished] = useState(false);
+  const [sharePending, setSharePending] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
 
   // Re-reads from localStorage whenever the lightbox navigates to a
@@ -39,6 +41,10 @@ export function LightboxFooter({
     const starred = localStorage.getItem(`starred-${asset.id}`) === "true";
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (localStorage), not derivable from props/state
     setIsStarred(starred);
+    // "✓ Link copied" is transient feedback for the asset that was just
+    // shared — carrying it across a sibling-nav jump would misattribute it
+    // to whatever asset the lightbox now shows.
+    setShareCopied(false);
   }, [asset.id]);
 
   const handleToggleStar = () => {
@@ -56,6 +62,21 @@ export function LightboxFooter({
     startTransition(async () => {
       await setAssetVisibility(asset.id, false);
       onHidden();
+    });
+  };
+
+  const handleShare = () => {
+    setSharePending(true);
+    startTransition(async () => {
+      try {
+        const token = await createShareLink(asset.id);
+        const url = `${window.location.origin}/share/${token}`;
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      } finally {
+        setSharePending(false);
+      }
     });
   };
 
@@ -163,13 +184,6 @@ export function LightboxFooter({
             )}
           </div>
 
-          {/* Page Text Expansion */}
-          {asset.extractedText && (
-            <div className="mb-4">
-              <CollapsibleText label="Page text" text={asset.extractedText} />
-            </div>
-          )}
-
           {/* Cover Letter Link */}
           {asset.coverLetter && (
             <div className="mb-4">
@@ -190,22 +204,37 @@ export function LightboxFooter({
               isStarred={isStarred}
               onToggleStar={handleToggleStar}
               onHide={() => setShowHideConfirm(true)}
+              onShare={handleShare}
+              sharePending={sharePending}
+              shareCopied={shareCopied}
               onPublish={() => setShowPublishConfirm(true)}
               publishPending={publishPending}
               published={published}
             />
           </div>
 
-          {/* Mobile: primary row (star, submittable) + sheet for the rest */}
+          {/* Mobile: primary row (star, share, submittable, more) + sheet
+              for the rest. Share stays in the primary row rather than
+              behind "More actions" — it's the headline action here, not a
+              secondary one. Horizontally scrollable as a safety net on the
+              narrowest phones rather than wrapping awkwardly. */}
           <div className="sm:hidden border-t border-border pt-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <button
                 onClick={handleToggleStar}
-                className="text-2xl leading-none hover:scale-110 transition-transform"
+                className="text-2xl leading-none hover:scale-110 transition-transform shrink-0"
                 title={isStarred ? "Remove from starred" : "Add to starred"}
                 aria-label={isStarred ? "Remove from starred" : "Add to starred"}
               >
                 {isStarred ? "⭐" : "☆"}
+              </button>
+
+              <button
+                onClick={handleShare}
+                disabled={sharePending}
+                className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 whitespace-nowrap shrink-0"
+              >
+                {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
               </button>
 
               {asset.submittableUrl && (
@@ -213,15 +242,15 @@ export function LightboxFooter({
                   href={asset.submittableUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
+                  className="text-sm font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover whitespace-nowrap shrink-0"
                 >
-                  Open in Submittable
+                  Submittable
                 </a>
               )}
 
               <button
                 onClick={() => setShowActions(true)}
-                className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text py-2"
+                className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text py-2 shrink-0"
               >
                 More actions
                 <span aria-hidden>›</span>
