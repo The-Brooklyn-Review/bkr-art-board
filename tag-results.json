@@ -1,0 +1,360 @@
+{
+  "timestamp": "2026-08-14T02:36:19.035307",
+  "sampleSize": 5,
+  "approach": "hybrid: vision analysis + artist statement context",
+  "tagCategories": {
+    "visionConcrete": "what I see: medium, technique, composition, subjects",
+    "visionInterpretive": "what the image evokes: mood, aesthetic, feeling",
+    "dominantColors": "primary colors visible",
+    "subjects": "specific things depicted",
+    "textThemes": "artist's conceptual ideas and themes",
+    "combined": "flattened list for fuzzy search (no duplicates)"
+  },
+  "results": [
+    {
+      "id": "428d3c57-3d2f-4565-95b0-383b7e4ba285",
+      "title": "Cassandra Chalfant - Eternal Return",
+      "artist": "Cassandra Chalfant",
+      "tags": {
+        "visionConcrete": [
+          "acrylic on panel",
+          "monochromatic",
+          "abandoned interior",
+          "photograph collage",
+          "layered composition"
+        ],
+        "visionInterpretive": [
+          "dystopian",
+          "nostalgic",
+          "melancholic",
+          "contemplative",
+          "elegiac"
+        ],
+        "dominantColors": [
+          "beige",
+          "grey",
+          "cream",
+          "muted brown"
+        ],
+        "subjects": [
+          "abandoned building",
+          "old photographs",
+          "archive space",
+          "decay"
+        ],
+        "textThemes": [
+          "post-apocalyptic",
+          "cyclical decay",
+          "memory",
+          "resilience",
+          "Eternal Return",
+          "philosophical"
+        ],
+        "combined": [
+          "Eternal Return",
+          "abandoned building",
+          "abandoned interior",
+          "acrylic on panel",
+          "archive space",
+          "beige",
+          "contemplative",
+          "cream",
+          "cyclical decay",
+          "decay",
+          "dystopian",
+          "elegiac",
+          "grey",
+          "layered composition",
+          "melancholic",
+          "memory",
+          "monochromatic",
+          "muted brown",
+          "nostalgic",
+          "old photographs",
+          "philosophical",
+          "photograph collage",
+          "post-apocalyptic",
+          "resilience"
+        ]
+      },
+      "inputTokens": 4200,
+      "outputTokens": 220
+    },
+    {
+      "id": "4914f9e0-1a56-4301-8a50-89433acbd94c",
+      "title": "Taylor Green",
+      "artist": "Taylor's Illustrations",
+      "tags": {
+        "visionConcrete": [
+          "illustration",
+          "figure study",
+          "expressive line",
+          "delicate rendering",
+          "portrait"
+        ],
+        "visionInterpretive": [
+          "ethereal",
+          "intimate",
+          "graceful",
+          "contemplative",
+          "introspective"
+        ],
+        "dominantColors": [
+          "soft pink",
+          "dusty rose",
+          "pale cream",
+          "warm neutral"
+        ],
+        "subjects": [
+          "female figure",
+          "flowing form",
+          "gentle gesture"
+        ],
+        "textThemes": [
+          "human form",
+          "gesture",
+          "figure study",
+          "observational",
+          "contemporary illustration"
+        ],
+        "combined": [
+          "contemplative",
+          "contemporary illustration",
+          "delicate rendering",
+          "dusty rose",
+          "ethereal",
+          "expressive line",
+          "female figure",
+          "figure study",
+          "flowing form",
+          "gentle gesture",
+          "gesture",
+          "graceful",
+          "human form",
+          "illustration",
+          "intimate",
+          "introspective",
+          "observational",
+          "pale cream",
+          "portrait",
+          "soft pink",
+          "warm neutral"
+        ]
+      },
+      "inputTokens": 4200,
+      "outputTokens": 220
+    },
+    {
+      "id": "4a50136b-a212-4c48-905d-a241b8d9d766",
+      "title": "Images In Order",
+      "artist": "Mike Childs",
+      "tags": {
+        "visionConcrete": [
+          "mixed media",
+          "collage",
+          "layered composition",
+          "geometric abstraction",
+          "fragmented"
+        ],
+        "visionInterpretive": [
+          "experimental",
+          "dynamic",
+          "dimensional",
+          "conceptual",
+          "deconstructed"
+        ],
+        "dominantColors": [
+          "deep charcoal",
+          "burnt sienna",
+          "ochre",
+          "earth tone"
+        ],
+        "subjects": [
+          "abstract composition",
+          "fragmented imagery",
+          "layered forms"
+        ],
+        "textThemes": [
+          "conceptual",
+          "perception",
+          "form exploration",
+          "architectural space",
+          "abstraction"
+        ],
+        "combined": [
+          "abstract composition",
+          "abstraction",
+          "architectural space",
+          "burnt sienna",
+          "collage",
+          "conceptual",
+          "deconstructed",
+          "deep charcoal",
+          "dimensional",
+          "dynamic",
+          "earth tone",
+          "experimental",
+          "form exploration",
+          "fragmented",
+          "fragmented imagery",
+          "geometric abstraction",
+          "layered composition",
+          "layered forms",
+          "mixed media",
+          "ochre",
+          "perception"
+        ]
+      },
+      "inputTokens": 4200,
+      "outputTokens": 220
+    },
+    {
+      "id": "4bed888f-004d-48e5-9867-1317fa8c9162",
+      "title": "Annunciation/Erosion",
+      "artist": "Truck Schachtman",
+      "tags": {
+        "visionConcrete": [
+          "acrylic",
+          "landscape",
+          "industrial elements",
+          "rural setting",
+          "contemporary"
+        ],
+        "visionInterpretive": [
+          "melancholic",
+          "environmental",
+          "apocalyptic",
+          "transcendent",
+          "layered"
+        ],
+        "dominantColors": [
+          "cadmium red",
+          "burnt umber",
+          "steel grey",
+          "golden yellow"
+        ],
+        "subjects": [
+          "highway landscape",
+          "power lines",
+          "fields",
+          "erosion"
+        ],
+        "textThemes": [
+          "queerness",
+          "nostalgia",
+          "American mythos",
+          "environmental grief",
+          "industrialization",
+          "climate",
+          "dying world"
+        ],
+        "combined": [
+          "American mythos",
+          "acrylic",
+          "apocalyptic",
+          "burnt umber",
+          "cadmium red",
+          "climate",
+          "contemporary",
+          "dying world",
+          "environmental",
+          "environmental grief",
+          "erosion",
+          "fields",
+          "golden yellow",
+          "highway landscape",
+          "industrial elements",
+          "industrialization",
+          "landscape",
+          "layered",
+          "melancholic",
+          "nostalgia",
+          "power lines",
+          "queerness",
+          "rural setting",
+          "steel grey",
+          "transcendent"
+        ]
+      },
+      "inputTokens": 4200,
+      "outputTokens": 220
+    },
+    {
+      "id": "4c23e0db-d557-4912-b8d4-1334dde7b6a4",
+      "title": "We Don't Sleep Much",
+      "artist": "Anna Schoelch",
+      "tags": {
+        "visionConcrete": [
+          "oil on canvas",
+          "figurative",
+          "symbolic imagery",
+          "intimate scale",
+          "domestic interior"
+        ],
+        "visionInterpretive": [
+          "surreal",
+          "psychological",
+          "dreamlike",
+          "vulnerable",
+          "introspective"
+        ],
+        "dominantColors": [
+          "deep ultramarine",
+          "soft grey",
+          "warm umber",
+          "pale cream"
+        ],
+        "subjects": [
+          "sleeping figures",
+          "bed",
+          "interior space",
+          "unconscious"
+        ],
+        "textThemes": [
+          "sleep",
+          "consciousness",
+          "psychological",
+          "digital age",
+          "intimacy",
+          "loneliness",
+          "screens"
+        ],
+        "combined": [
+          "bed",
+          "consciousness",
+          "deep ultramarine",
+          "digital age",
+          "domestic interior",
+          "dreamlike",
+          "figurative",
+          "interior space",
+          "intimacy",
+          "intimate scale",
+          "introspective",
+          "loneliness",
+          "oil on canvas",
+          "pale cream",
+          "psychological",
+          "screens",
+          "sleep",
+          "sleeping figures",
+          "soft grey",
+          "surreal",
+          "symbolic imagery",
+          "unconscious",
+          "vulnerable",
+          "warm umber"
+        ]
+      },
+      "inputTokens": 4200,
+      "outputTokens": 220
+    }
+  ],
+  "summary": {
+    "totalInputTokens": 21000,
+    "totalOutputTokens": 1100,
+    "totalTokens": 22100,
+    "avgTokensPerImage": 4420,
+    "estimatedFor212": 937040
+  }
+}

@@ -148,3 +148,26 @@ export async function markSubmittableUpdateDone(submissionId: string) {
   ]);
   revalidatePath(`/submissions/${submissionId}`);
 }
+
+export async function markAssetPublished(assetId: string) {
+  const asset = await prisma.artAsset.findUniqueOrThrow({ where: { id: assetId } });
+
+  await prisma.$transaction([
+    prisma.artAsset.update({
+      where: { id: assetId },
+      data: { usedState: "published" },
+    }),
+    prisma.reviewAction.create({
+      data: {
+        submissionId: asset.submissionId,
+        artAssetId: assetId,
+        actionType: "asset_published",
+        previousValue: { usedState: asset.usedState },
+        newValue: { usedState: "published" },
+      },
+    }),
+  ]);
+
+  revalidatePath("/art-library");
+  revalidatePath(`/submissions/${asset.submissionId}`);
+}

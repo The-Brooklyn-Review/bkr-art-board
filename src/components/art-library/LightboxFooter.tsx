@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutations";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
@@ -111,10 +111,26 @@ export function LightboxFooter({
   onHidden: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isStarred, setIsStarred] = useState(false);
   const [thumbnailSet, setThumbnailSet] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
+
+  useEffect(() => {
+    const starred = localStorage.getItem(`starred-${asset.id}`) === "true";
+    setIsStarred(starred);
+  }, [asset.id]);
+
+  const handleToggleStar = () => {
+    const newStarred = !isStarred;
+    setIsStarred(newStarred);
+    if (newStarred) {
+      localStorage.setItem(`starred-${asset.id}`, "true");
+    } else {
+      localStorage.removeItem(`starred-${asset.id}`);
+    }
+  };
 
   const handleHide = () => {
     startTransition(async () => {
@@ -143,11 +159,20 @@ export function LightboxFooter({
         original side-by-side layout unchanged at wider widths.
       */}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 max-w-5xl mx-auto">
-        <div className="min-w-0">
-          <p className="font-[family-name:var(--font-display)] text-lg text-text">
-            {asset.artistName}
-          </p>
-          <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
+        <div className="min-w-0 flex gap-2 items-start">
+          <button
+            onClick={handleToggleStar}
+            className="shrink-0 text-3xl sm:text-4xl leading-none hover:scale-110 transition-transform"
+            title={isStarred ? "Remove from starred" : "Add to starred"}
+            aria-label={isStarred ? "Remove from starred" : "Add to starred"}
+          >
+            {isStarred ? "⭐" : "☆"}
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="font-[family-name:var(--font-display)] text-lg text-text">
+              {asset.artistName}
+            </p>
+            <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
           {knownLabels.length > 0 && (
             <p className="text-xs text-accent uppercase tracking-wide mt-1">
               {knownLabels.map((l) => displayLabel(l.name)).join(" · ")}
@@ -193,12 +218,14 @@ export function LightboxFooter({
               {asset.coverLetter}
             </p>
           )}
+          </div>
+        </div>
 
-          {/* Desktop: always visible, unchanged. Mobile: five links
-              wrapping into a ragged multi-line block was the crowding
-              problem — collapsed behind "More actions" above instead,
-              stacked vertically (more thumb-friendly) when opened. */}
-          <div className="hidden sm:block mt-2">
+        {/* Desktop: always visible, unchanged. Mobile: five links
+            wrapping into a ragged multi-line block was the crowding
+            problem — collapsed behind "More actions" above instead,
+            stacked vertically (more thumb-friendly) when opened. */}
+        <div className="hidden sm:block mt-2">
             <ActionLinks
               asset={asset}
               isPending={isPending}
@@ -206,20 +233,19 @@ export function LightboxFooter({
               onSetThumbnail={handleSetThumbnail}
               onHide={handleHide}
             />
-          </div>
-          {showActions && (
-            <div className="sm:hidden mt-2.5">
-              <ActionLinks
-                asset={asset}
-                isPending={isPending}
-                thumbnailSet={thumbnailSet}
-                onSetThumbnail={handleSetThumbnail}
-                onHide={handleHide}
-                stacked
-              />
-            </div>
-          )}
         </div>
+        {showActions && (
+          <div className="sm:hidden mt-2.5">
+            <ActionLinks
+              asset={asset}
+              isPending={isPending}
+              thumbnailSet={thumbnailSet}
+              onSetThumbnail={handleSetThumbnail}
+              onHide={handleHide}
+              stacked
+            />
+          </div>
+        )}
 
         {siblings.length > 1 && (
           <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 sm:max-w-xs overflow-x-auto scrollbar-hide">
