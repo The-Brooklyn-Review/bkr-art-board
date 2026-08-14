@@ -25,6 +25,16 @@
    */
   --color-text-muted: #a39c8f;
   --color-accent: #b8956b;
+  /*
+   * Hover background for outlined/ghost buttons (footer action row, "More
+   * actions" sheet) — a touch lighter than --color-surface so a hover is
+   * actually visible against the near-black background. This token was
+   * referenced as `hover:bg-bg-hover` in several components before it
+   * existed here, which is a silent no-op in Tailwind (an undefined theme
+   * color just doesn't generate a utility) — those hovers had no visible
+   * effect at all until this was added.
+   */
+  --color-bg-hover: #211f1d;
   --font-display: var(--next-font-display), Georgia, serif;
   --font-ui: var(--next-font-ui), system-ui, sans-serif;
 }
@@ -33,6 +43,25 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-ui);
+}
+
+/*
+ * How much space LightboxFooter's content actually needs, split at the
+ * same 640px breakpoint as its own `sm:` classes — below it, the footer's
+ * top row stacks the siblings thumbnails above the metadata block
+ * (flex-col-reverse) instead of sharing one row with it like sm: and up
+ * does, so mobile genuinely runs taller when a submission has siblings.
+ * Referenced by LIGHTBOX_FOOTER_MAX_HEIGHT (lightboxLayout.ts) for both
+ * the footer's own max-height and the image's reserved padding-bottom —
+ * one CSS-native, no-JS source of truth for both, so they can't disagree.
+ */
+:root {
+  --lightbox-footer-reserve: min(34vh, 280px);
+}
+@media (min-width: 640px) {
+  :root {
+    --lightbox-footer-reserve: min(24vh, 220px);
+  }
 }
 
 /* For the mobile filter-pill scroll strip — a visible scrollbar on a

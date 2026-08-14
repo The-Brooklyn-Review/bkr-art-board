@@ -437,7 +437,14 @@ export function ArtLibraryClient({
         styles={{
           // Reserve space so the custom slideFooter overlay never covers the
           // artwork — the image's max-height shrinks to fit above this band
-          // instead of being obscured by whatever renders on top of it.
+          // instead of being obscured by whatever renders on top of it. A
+          // fixed worst-case reservation rather than measuring the footer's
+          // real height dynamically: that was tried (see git history) and
+          // caused worse bugs — the library preloads and renders slideFooter
+          // for the off-screen prev/next slides too, all sharing this one
+          // style value, so a live measurement can win a race against
+          // whichever slide last reported its height and end up applied to
+          // whatever's actually on screen. A fixed value can't race.
           slide: { paddingBottom: LIGHTBOX_FOOTER_MAX_HEIGHT },
         }}
       />

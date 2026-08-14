@@ -32,7 +32,7 @@ export function ActionLinks({
     <div className="flex items-center gap-3 text-sm flex-wrap">
       <button
         onClick={onToggleStar}
-        className="text-2xl leading-none hover:scale-110 transition-transform"
+        className="text-2xl leading-none hover:scale-110 transition-transform cursor-pointer"
         title={isStarred ? "Remove from starred" : "Add to starred"}
         aria-label={isStarred ? "Remove from starred" : "Add to starred"}
       >
@@ -42,7 +42,7 @@ export function ActionLinks({
       <button
         onClick={onShare}
         disabled={sharePending}
-        className="font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50"
+        className="font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
       >
         {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
       </button>
@@ -52,7 +52,7 @@ export function ActionLinks({
           href={asset.submittableUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover"
+          className="font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover transition-colors"
         >
           Open in Submittable
         </a>
@@ -61,7 +61,7 @@ export function ActionLinks({
       <button
         onClick={onPublish}
         disabled={isPending || publishPending || published}
-        className="font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover disabled:opacity-50"
+        className="font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
       >
         {published ? "✓ Published" : publishPending ? "Publishing…" : "Mark as Published"}
       </button>
@@ -85,7 +85,7 @@ export function ActionLinks({
         <button
           onClick={onHide}
           disabled={isPending}
-          className="text-text-muted hover:text-accent transition-colors disabled:opacity-50"
+          className="text-text-muted hover:text-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {isPending ? "Hiding…" : "Hide"}
         </button>

@@ -222,7 +222,7 @@ export function LightboxFooter({
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <button
                 onClick={handleToggleStar}
-                className="text-2xl leading-none hover:scale-110 transition-transform shrink-0"
+                className="text-2xl leading-none hover:scale-110 transition-transform shrink-0 cursor-pointer"
                 title={isStarred ? "Remove from starred" : "Add to starred"}
                 aria-label={isStarred ? "Remove from starred" : "Add to starred"}
               >
@@ -232,7 +232,7 @@ export function LightboxFooter({
               <button
                 onClick={handleShare}
                 disabled={sharePending}
-                className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 whitespace-nowrap shrink-0"
+                className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer disabled:cursor-not-allowed"
               >
                 {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
               </button>
@@ -242,7 +242,7 @@ export function LightboxFooter({
                   href={asset.submittableUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover whitespace-nowrap shrink-0"
+                  className="text-sm font-semibold px-3 py-2 rounded border border-border text-text hover:bg-bg-hover transition-colors whitespace-nowrap shrink-0"
                 >
                   Submittable
                 </a>
@@ -250,7 +250,7 @@ export function LightboxFooter({
 
               <button
                 onClick={() => setShowActions(true)}
-                className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text py-2 shrink-0"
+                className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text transition-colors py-2 shrink-0 cursor-pointer"
               >
                 More actions
                 <span aria-hidden>›</span>

@@ -22,7 +22,12 @@ export function ZoomableLightbox({ styles, ...props }: Omit<Props, "plugins" | "
   return (
     <Lightbox
       plugins={[Zoom]}
-      zoom={{ maxZoomPixelRatio: 3, scrollToZoom: true }}
+      // minZoom below the library's default of 1.0 gives a little room to
+      // zoom back out past "fit" — a safety margin in case the reserved
+      // footer space or an unusual aspect ratio ever leaves an image
+      // feeling tight against the frame, without needing to touch how the
+      // image is sized by default.
+      zoom={{ maxZoomPixelRatio: 3, scrollToZoom: true, minZoom: 0.8 }}
       styles={{ container: { backgroundColor: "rgba(14, 14, 13, 0.97)" }, ...styles }}
       {...props}
     />
