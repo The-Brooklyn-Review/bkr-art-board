@@ -1,7 +1,6 @@
 /**
- * Phase 1 dry-run (Checkpoint A).
- *
- * Proves, against the LIVE Submittable API:
+ * Read-only preflight check against the live Submittable API before running
+ * the real importer (process-submission.ts). Proves:
  *   1. Auth works (and which header encoding the API accepts).
  *   2. We can locate "Winter 2025 Visual Arts Submissions" (→ projectId).
  *   3. We can locate the "Consider" label + the 7 art labels (→ labelIds).
@@ -16,12 +15,8 @@
 import { config } from "dotenv";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  submittableFetch,
-  fetchAllPages,
-  SubmittableError,
-} from "../src/lib/submittable/client.ts";
-import type { ListProject, Label, SubmissionListItem } from "../src/lib/submittable/types.ts";
+import { submittableFetch, fetchAllPages, SubmittableError } from "@/lib/submittable/client";
+import type { ListProject, Label, SubmissionListItem } from "@/lib/submittable/types";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 

@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { Newsreader, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-// Editorial serif — headings, display labels. Sans — all UI chrome.
-// Per plan §Design Direction: this is a museum-archive tool, not a SaaS
-// dashboard, so the type pairing leans editorial rather than corporate.
-// Newsreader carries an optical-size axis, so it stays sharp from small
-// captions up through large display headings instead of just scaling.
+// Editorial serif — headings, display labels. Sans — all UI chrome. This is
+// a museum-archive tool, not a SaaS dashboard, so the type pairing leans
+// editorial rather than corporate. Newsreader carries an optical-size axis,
+// so it stays sharp from small captions up through large display headings
+// instead of just scaling.
 const newsreader = Newsreader({
   variable: "--next-font-display",
   subsets: ["latin"],

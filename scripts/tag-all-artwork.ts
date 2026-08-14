@@ -260,7 +260,7 @@ async function main() {
     const progress = `${i + 1}/${assets.length}`;
 
     process.stdout.write(
-      `[${progress}] ${asset.submission.submissionTitle.slice(0, 40).padEnd(40)} … `,
+      `[${progress}] ${(asset.submission.submissionTitle ?? "Untitled").slice(0, 40).padEnd(40)} … `,
     );
 
     try {

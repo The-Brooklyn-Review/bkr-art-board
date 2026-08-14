@@ -105,11 +105,18 @@ export async function fetchAllPages<T>(
   let pages = 0;
 
   do {
-    const sep = basePath.includes("?") ? "&" : "?";
+    // Continuation requests drop basePath's original query entirely (see
+    // doc comment above — filters are fixed on the first request), so the
+    // path is always just "{base}?continuationToken=...", never "&". A
+    // previous version of this tried to detect whether basePath already had
+    // a "?" and used "&" in that case — wrong, since the query gets
+    // stripped either way, producing a malformed "{base}&continuationToken="
+    // with no "?" at all. Only ever showed up past page one, so it went
+    // unnoticed while every dataset fit on a single page.
     const path =
       token === null
         ? basePath
-        : `${basePath.split("?")[0]}${sep}continuationToken=${encodeURIComponent(token)}`;
+        : `${basePath.split("?")[0]}?continuationToken=${encodeURIComponent(token)}`;
 
     const page: ContinuationPage<T> = await submittableFetch<ContinuationPage<T>>(path);
     if (page.items) all.push(...page.items);

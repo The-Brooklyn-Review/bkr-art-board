@@ -1,7 +1,7 @@
 /**
- * Full importer (Phase 3). For each submission: fetch entries, download
- * every uploaded file, render PDFs to pages, classify + crop + thumbnail
- * each page, upload everything to R2, and write it all to the DB.
+ * The full importer. For each submission: fetch entries, download every
+ * uploaded file, render PDFs to pages, classify + crop + thumbnail each
+ * page, upload everything to R2, and write it all to the DB.
  *
  * Two-stage pipeline — run dry-run.ts first. This script reads the
  * submission list and labels from fixtures/submissions-matching.json and
@@ -16,7 +16,10 @@
  * printed at the end for a full list of what failed and why.
  *
  * Idempotent per file: re-running replaces that file's assets rather than
- * duplicating them (see the deleteMany before asset creation below).
+ * duplicating them. Rendering/classifying/cropping happens entirely
+ * in-memory first (see prepareAssets below); the old assets aren't touched
+ * until that's fully succeeded, so a failure partway through a file leaves
+ * its previous assets exactly as they were, not partially replaced.
  *
  * Run:
  *   npx tsx scripts/process-submission.ts <submissionId> [submissionId...]
@@ -29,13 +32,13 @@ import sharp from "sharp";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
-import { prisma } from "../src/lib/db/index.ts";
-import { uploadToR2 } from "../src/lib/storage/r2.ts";
-import { renderPdfPages, extractPdfPagesText } from "../src/lib/processing/pdf.ts";
-import { classifyPage } from "../src/lib/processing/classify.ts";
-import { extractArtworkRegion } from "../src/lib/processing/crop.ts";
-import { submittableFetch } from "../src/lib/submittable/client.ts";
-import type { EntriesResponse } from "../src/lib/submittable/types.ts";
+import { prisma } from "@/lib/db";
+import { uploadToR2 } from "@/lib/storage/r2";
+import { renderPdfPages, extractPdfPagesText } from "@/lib/processing/pdf";
+import { classifyPage } from "@/lib/processing/classify";
+import { extractArtworkRegion } from "@/lib/processing/crop";
+import { submittableFetch } from "@/lib/submittable/client";
+import type { EntriesResponse } from "@/lib/submittable/types";
 
 const FIXTURES_DIR = resolve(process.cwd(), "fixtures");
 
@@ -127,6 +130,218 @@ async function processImageVariants(sourceBuffer: Buffer, isArtwork: boolean) {
   };
 }
 
+/** A fully rendered/classified/cropped asset, ready to upload + persist —
+ * nothing external (R2, DB) has been touched yet to produce this. */
+export type PreparedAsset = {
+  assetType: "pdf_page" | "uploaded_image";
+  pageNumber: number | null;
+  largeKey: string;
+  largeBuffer: Buffer;
+  thumbKey: string;
+  thumbBuffer: Buffer;
+  width: number | null;
+  height: number | null;
+  aspectRatio: number | null;
+  extractedText: string | null;
+  pageType: string;
+  visibleInArtLibrary: boolean;
+  debug: {
+    whiteRatio: number;
+    blackRatio: number;
+    midtoneRatio: number;
+    colorfulRatio: number;
+  } | null;
+};
+
+/**
+ * Renders/classifies/crops every page or image for one file, entirely
+ * in-memory. Throws on the first failure (a bad page, a sharp error) with
+ * nothing written anywhere — the caller can retry freely since this step
+ * has no side effects to unwind.
+ */
+async function prepareAssets(
+  submissionId: string,
+  file: { fileId: string; fileName: string },
+  buffer: Buffer,
+): Promise<PreparedAsset[]> {
+  if (PDF_EXT.test(file.fileName)) {
+    console.log(`    rendering PDF pages…`);
+    const [pages, pageTexts] = await Promise.all([
+      renderPdfPages(buffer),
+      extractPdfPagesText(buffer).catch((err) => {
+        console.warn(`    ⚠ text extraction failed: ${errorMessage(err)}`);
+        return [] as string[];
+      }),
+    ]);
+    console.log(`    ✓ ${pages.length} page(s) rendered`);
+
+    const prepared: PreparedAsset[] = [];
+    for (let pageNum = 0; pageNum < pages.length; pageNum++) {
+      const pageBuffer = pages[pageNum];
+      const { pageType, visibleInArtLibrary, debug } = await classifyPage(pageBuffer);
+      const variants = await processImageVariants(pageBuffer, pageType === "artwork");
+      console.log(
+        `    page ${pageNum + 1}: ${pageType} (visible=${visibleInArtLibrary}) whiteRatio=${debug.whiteRatio.toFixed(2)}`,
+      );
+      prepared.push({
+        assetType: "pdf_page",
+        pageNumber: pageNum + 1,
+        largeKey: `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-full.webp`,
+        largeBuffer: variants.full,
+        thumbKey: `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-thumb.webp`,
+        thumbBuffer: variants.thumb,
+        width: variants.width,
+        height: variants.height,
+        aspectRatio: variants.aspectRatio,
+        extractedText: pageTexts[pageNum] || null,
+        pageType,
+        visibleInArtLibrary,
+        debug,
+      });
+    }
+    return prepared;
+  }
+
+  if (IMAGE_EXT.test(file.fileName)) {
+    console.log(`    processing as uploaded image…`);
+    const variants = await processImageVariants(buffer, true);
+    return [
+      {
+        assetType: "uploaded_image",
+        pageNumber: null,
+        largeKey: `submittable/${submissionId}/rendered/${file.fileId}/image-full.webp`,
+        largeBuffer: variants.full,
+        thumbKey: `submittable/${submissionId}/rendered/${file.fileId}/image-thumb.webp`,
+        thumbBuffer: variants.thumb,
+        width: variants.width,
+        height: variants.height,
+        aspectRatio: variants.aspectRatio,
+        extractedText: null,
+        pageType: "artwork",
+        visibleInArtLibrary: true,
+        debug: null,
+      },
+    ];
+  }
+
+  throw new Error(`Unsupported file type: ${file.fileName}`);
+}
+
+/**
+ * Uploads every prepared asset to R2, then swaps this file's old ArtAsset
+ * rows for new ones inside a single Prisma transaction — deleting the old
+ * rows, creating the new ones, and (best-effort) re-pointing a curator-
+ * selected thumbnail to its replacement. Marks the file "processed" on
+ * success, or "error" (with the real message) on failure anywhere in this
+ * sequence — upload, transaction, or the final status update itself.
+ *
+ * NOT atomic across R2 and Postgres — that would need a two-phase commit or
+ * an outbox pattern, real complexity this internal, admin-triggered,
+ * freely-retryable script doesn't warrant. R2 uploads happen first, to
+ * these files' own stable per-page keys. If they succeed but the
+ * transaction then fails, the OLD rows survive (so nothing is lost or
+ * inaccessible), but they now describe metadata — dimensions,
+ * classification, visibility, extracted text — for images that have
+ * already been overwritten with the NEW render. The images themselves are
+ * always correct; only the description of them can trail behind until the
+ * file is reprocessed successfully. Re-running is always safe either way:
+ * uploads are idempotent overwrites, and the transaction only ever touches
+ * this one file's rows.
+ */
+export async function replaceFileAssets(
+  submissionDbId: string,
+  submissionFile: { id: string },
+  prepared: PreparedAsset[],
+  fileIndex: number,
+): Promise<void> {
+  try {
+    for (const asset of prepared) {
+      await uploadToR2(asset.largeKey, asset.largeBuffer, "image/webp");
+      await uploadToR2(asset.thumbKey, asset.thumbBuffer, "image/webp");
+    }
+
+    // A curator-picked thumbnail pointing at one of this file's OLD assets
+    // needs to survive the swap below. fk_thumbnail_asset is
+    // ON DELETE SET NULL (verified against the live DB — see
+    // prisma/schema.prisma), so deleting that old asset just clears the
+    // reference rather than failing; without this, every reprocess would
+    // silently drop a curator's thumbnail choice. Matched by page position,
+    // not asset ID, since the old asset is gone and the new one has a
+    // freshly generated ID.
+    const submission = await prisma.submittableSubmission.findUniqueOrThrow({
+      where: { id: submissionDbId },
+      select: { thumbnailAssetId: true },
+    });
+    const oldThumbnailAsset = submission.thumbnailAssetId
+      ? await prisma.artAsset.findFirst({
+          where: { id: submission.thumbnailAssetId, submissionFileId: submissionFile.id },
+          select: { pageNumber: true },
+        })
+      : null;
+
+    let thumbnailCleared = false;
+
+    // The interactive (callback) form, not the array form used elsewhere in
+    // this codebase — re-pointing the thumbnail needs each new asset's
+    // generated id, which only exists once its `create` has actually run.
+    await prisma.$transaction(async (tx) => {
+      await tx.artAsset.deleteMany({ where: { submissionFileId: submissionFile.id } });
+
+      const created = await Promise.all(
+        prepared.map((asset) =>
+          tx.artAsset.create({
+            data: {
+              submissionId: submissionDbId,
+              submissionFileId: submissionFile.id,
+              assetType: asset.assetType,
+              pageNumber: asset.pageNumber,
+              fileIndex,
+              storagePathLarge: asset.largeKey,
+              storagePathThumbnail: asset.thumbKey,
+              width: asset.width,
+              height: asset.height,
+              aspectRatio: asset.aspectRatio,
+              extractedText: asset.extractedText,
+              pageType: asset.pageType,
+              visibleInArtLibrary: asset.visibleInArtLibrary,
+              rawProcessingJson: asset.debug ?? undefined,
+            },
+          }),
+        ),
+      );
+
+      if (oldThumbnailAsset) {
+        const replacement = created.find((a) => a.pageNumber === oldThumbnailAsset.pageNumber);
+        if (replacement) {
+          await tx.submittableSubmission.update({
+            where: { id: submissionDbId },
+            data: { thumbnailAssetId: replacement.id },
+          });
+        } else {
+          thumbnailCleared = true;
+        }
+      }
+    });
+
+    if (thumbnailCleared) {
+      console.warn(
+        `    ⚠ thumbnail selection cleared — no replacement asset at the same page position`,
+      );
+    }
+
+    await prisma.submissionFile.update({
+      where: { id: submissionFile.id },
+      data: { processingStatus: "processed" },
+    });
+  } catch (err) {
+    await prisma.submissionFile.update({
+      where: { id: submissionFile.id },
+      data: { processingStatus: "error", processingError: errorMessage(err) },
+    });
+    throw err;
+  }
+}
+
 /** Processes one file's pages/image. Throws on failure — caller decides how to record it. */
 async function processFile(
   submissionDbId: string,
@@ -169,94 +384,26 @@ async function processFile(
     },
   });
 
-  // Idempotency: a re-run (retry, or re-processing with an improved
-  // pipeline) must replace this file's assets, not pile up duplicates.
-  await prisma.artAsset.deleteMany({ where: { submissionFileId: submissionFile.id } });
-
-  let assetCount = 0;
-
-  if (PDF_EXT.test(file.fileName)) {
-    console.log(`    rendering PDF pages…`);
-    const [pages, pageTexts] = await Promise.all([
-      renderPdfPages(buffer),
-      extractPdfPagesText(buffer).catch((err) => {
-        console.warn(`    ⚠ text extraction failed: ${errorMessage(err)}`);
-        return [] as string[];
-      }),
-    ]);
-    console.log(`    ✓ ${pages.length} page(s) rendered`);
-
-    for (let pageNum = 0; pageNum < pages.length; pageNum++) {
-      const pageBuffer = pages[pageNum];
-      const { pageType, visibleInArtLibrary, debug } = await classifyPage(pageBuffer);
-      const variants = await processImageVariants(pageBuffer, pageType === "artwork");
-
-      const largeKey = `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-full.webp`;
-      const thumbKey = `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-thumb.webp`;
-      await uploadToR2(largeKey, variants.full, "image/webp");
-      await uploadToR2(thumbKey, variants.thumb, "image/webp");
-
-      await prisma.artAsset.create({
-        data: {
-          submissionId: submissionDbId,
-          submissionFileId: submissionFile.id,
-          assetType: "pdf_page",
-          pageNumber: pageNum + 1,
-          fileIndex,
-          storagePathLarge: largeKey,
-          storagePathThumbnail: thumbKey,
-          width: variants.width,
-          height: variants.height,
-          aspectRatio: variants.aspectRatio,
-          extractedText: pageTexts[pageNum] || null,
-          pageType,
-          visibleInArtLibrary,
-          rawProcessingJson: debug,
-        },
-      });
-      assetCount++;
-      console.log(
-        `    page ${pageNum + 1}: ${pageType} (visible=${visibleInArtLibrary}) whiteRatio=${debug.whiteRatio.toFixed(2)}`,
-      );
-    }
-  } else if (IMAGE_EXT.test(file.fileName)) {
-    console.log(`    processing as uploaded image…`);
-    const variants = await processImageVariants(buffer, true);
-    const largeKey = `submittable/${submissionId}/rendered/${file.fileId}/image-full.webp`;
-    const thumbKey = `submittable/${submissionId}/rendered/${file.fileId}/image-thumb.webp`;
-    await uploadToR2(largeKey, variants.full, "image/webp");
-    await uploadToR2(thumbKey, variants.thumb, "image/webp");
-
-    await prisma.artAsset.create({
-      data: {
-        submissionId: submissionDbId,
-        submissionFileId: submissionFile.id,
-        assetType: "uploaded_image",
-        fileIndex,
-        storagePathLarge: largeKey,
-        storagePathThumbnail: thumbKey,
-        width: variants.width,
-        height: variants.height,
-        aspectRatio: variants.aspectRatio,
-        pageType: "artwork",
-        visibleInArtLibrary: true,
-      },
-    });
-    assetCount++;
-    console.log(`    ✓ 1 image asset created`);
-  } else {
+  // Render/classify/crop everything FIRST, fully in-memory. This is where
+  // failures are most likely (a bad page, a sharp error) — if any of it
+  // throws, nothing below has run yet, so this file's existing assets are
+  // completely untouched and the run is freely retryable. Previously the
+  // old assets were deleted up front, before any of this risky work even
+  // started — a failure on page 3 of 5 would leave the file with fewer
+  // assets than before the retry, not the same or better.
+  let prepared: PreparedAsset[];
+  try {
+    prepared = await prepareAssets(submissionId, file, buffer);
+  } catch (err) {
     await prisma.submissionFile.update({
       where: { id: submissionFile.id },
-      data: { processingStatus: "error", processingError: "Unsupported file type" },
+      data: { processingStatus: "error", processingError: errorMessage(err) },
     });
-    throw new Error(`Unsupported file type: ${file.fileName}`);
+    throw err;
   }
 
-  await prisma.submissionFile.update({
-    where: { id: submissionFile.id },
-    data: { processingStatus: "processed" },
-  });
-  return assetCount;
+  await replaceFileAssets(submissionDbId, submissionFile, prepared, fileIndex);
+  return prepared.length;
 }
 
 type SubmissionResult = {
@@ -344,7 +491,12 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
         projectName: summary.projectTitle,
         projectId: summary.projectId,
         rawSubmissionJson: summary,
-        rawEntriesJson: entries,
+        // Prisma's JSON input type requires a plain index-signature-shaped
+        // object; EntriesResponse is a proper `interface`, which TypeScript
+        // doesn't structurally treat as one. Round-tripping through
+        // JSON.stringify (which is what this data does on the way into a
+        // Json column regardless) produces a plain object that satisfies it.
+        rawEntriesJson: JSON.parse(JSON.stringify(entries)),
         syncStatus: "synced",
         lastSyncedAt: new Date(),
         processingStatus: "processing",
@@ -477,9 +629,17 @@ async function main() {
   console.log("═".repeat(70));
 }
 
-main()
-  .catch((err) => {
-    console.error("\n✗ SCRIPT-LEVEL FAILURE (bug, not a per-submission issue):", err);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+// Only run when executed directly (`npx tsx scripts/process-submission.ts`),
+// not when imported — e.g. by process-submission.test.ts, which exercises
+// replaceFileAssets in isolation with prisma/uploadToR2 mocked and can't
+// have this kick off a real run against the live API/DB as a side effect
+// of the import alone.
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  main()
+    .catch((err) => {
+      console.error("\n✗ SCRIPT-LEVEL FAILURE (bug, not a per-submission issue):", err);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 
 /**
- * Every mutation here is local-only — never touches Submittable. Per plan
- * §22, v1 stays read/import-focused against the official system; all
- * review state (recommendations, visibility, notes, thumbnails) lives only
- * in this app's DB. Most mutations also write a ReviewAction audit row,
- * matching the plan's schema design (§12.7) — setNeedsSubmittableUpdate is
- * the one exception, left unaudited as a frequently-toggled flag.
+ * Every mutation here is local-only — never touches Submittable. This app
+ * stays read/import-focused against the official system; all review state
+ * (recommendations, visibility, notes, thumbnails) lives only in this app's
+ * own DB (see prisma/schema.prisma's "Local review state" tier). Most
+ * mutations also write a ReviewAction audit row — setNeedsSubmittableUpdate
+ * is the one exception, left unaudited as a frequently-toggled flag.
  */
 
 export type LocalReviewRecommendation =
@@ -41,6 +41,11 @@ export async function setSubmissionThumbnail(submissionId: string, assetId: stri
   const submission = await prisma.submittableSubmission.findUniqueOrThrow({
     where: { id: submissionId },
   });
+
+  // Server Actions are a network entry point — a stale or malformed client
+  // request could otherwise assign a DIFFERENT submission's asset as this
+  // one's thumbnail with no error at all.
+  await prisma.artAsset.findFirstOrThrow({ where: { id: assetId, submissionId } });
 
   await prisma.$transaction([
     prisma.submittableSubmission.update({

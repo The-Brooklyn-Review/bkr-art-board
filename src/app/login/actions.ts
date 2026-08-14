@@ -4,9 +4,25 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AUTH_COOKIE_NAME, expectedAuthCookieValue, isCorrectPassword } from "@/lib/auth";
 
+const DEFAULT_NEXT = "/art-library";
+
+// Only ever redirect to a same-origin relative path. `next` is attacker-
+// controllable (a crafted /login?next=https://evil.example link), and
+// Next's redirect() will happily send the browser anywhere, absolute URLs
+// included — without this check, a successful login could end by
+// redirecting the user off-site (open redirect). "//host" and "/\host" are
+// both rejected too — browsers treat a Location starting with either as
+// protocol-relative, i.e. still off-site despite starting with a slash.
+function safeNextPath(next: string): string {
+  if (next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")) {
+    return next;
+  }
+  return DEFAULT_NEXT;
+}
+
 export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/art-library");
+  const next = safeNextPath(String(formData.get("next") ?? DEFAULT_NEXT));
 
   // Single shared password, no per-account lockout — this is the cheap
   // mitigation: every attempt (success or failure) costs a fixed second,

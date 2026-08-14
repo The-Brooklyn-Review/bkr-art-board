@@ -67,7 +67,14 @@ model SubmittableSubmission {
   notes                     ReviewNote[]
   files                     SubmissionFile[]
   labels                    SubmissionLabel[]
-  thumbnailAsset            ArtAsset?         @relation("SubmissionThumbnail", fields: [thumbnailAssetId], references: [id], onUpdate: NoAction, map: "fk_thumbnail_asset")
+  // onDelete: SetNull matches the live constraint (verified directly
+  // against pg_constraint, not inferred) — deleting the referenced ArtAsset
+  // clears this rather than being blocked. scripts/process-submission.ts's
+  // replaceFileAssets relies on this: reprocessing a file deletes and
+  // recreates its assets, and a curator-selected thumbnail pointing at one
+  // of the old rows needs to survive that as a cleared reference, not a
+  // failed transaction.
+  thumbnailAsset            ArtAsset?         @relation("SubmissionThumbnail", fields: [thumbnailAssetId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_thumbnail_asset")
 
   @@index([syncStatus, processingStatus], map: "idx_submittable_submissions_status")
   @@map("submittable_submissions")

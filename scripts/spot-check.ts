@@ -10,8 +10,8 @@ import { config } from "dotenv";
 import { resolve } from "node:path";
 config({ path: resolve(process.cwd(), ".env.local") });
 
-import { prisma } from "../src/lib/db/index.ts";
-import { getSignedR2Url } from "../src/lib/storage/r2.ts";
+import { prisma } from "@/lib/db";
+import { getSignedR2Url } from "@/lib/storage/r2";
 
 async function main() {
   console.log("=== Hidden (cover_statement) assets — verify these are really text, not art ===");
