@@ -20,31 +20,34 @@ export default function Image() {
       >
         <div
           style={{
-            width: 64,
-            height: 64,
+            width: 76,
+            height: 76,
             borderRadius: "50%",
             background: "#b8956b",
-            marginBottom: 40,
+            marginBottom: 48,
           }}
         />
         <div
           style={{
-            fontSize: 72,
+            fontSize: 92,
             fontWeight: 600,
             color: "#ede9e2",
             letterSpacing: -1,
           }}
         >
-          TBR Art Board
+          The Brooklyn Review
         </div>
         <div
           style={{
-            fontSize: 30,
+            fontSize: 34,
+            fontWeight: 600,
             color: "#a39c8f",
-            marginTop: 20,
+            marginTop: 24,
+            letterSpacing: 3,
+            textTransform: "uppercase",
           }}
         >
-          Art review — The Brooklyn Review
+          Visual Art Gallery
         </div>
       </div>
     ),
