@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 // No `server-only` guard: shared with standalone scripts run via tsx,
 // where that package unconditionally throws (see src/lib/db/index.ts).
-export const AUTH_COOKIE_NAME = "tbr_auth";
+export const AUTH_COOKIE_NAME = "bkr_auth";
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");

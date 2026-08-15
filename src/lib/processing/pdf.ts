@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
  * confirmed working via `which pdftoppm` before this module was written.
  */
 export async function renderPdfPages(pdfBuffer: Buffer, dpi = 220): Promise<Buffer[]> {
-  const dir = await mkdtemp(join(tmpdir(), "tbr-pdf-"));
+  const dir = await mkdtemp(join(tmpdir(), "bkr-pdf-"));
   const inputPath = join(dir, "input.pdf");
   const outputPrefix = join(dir, "page");
 
@@ -48,7 +48,7 @@ export async function renderPdfPages(pdfBuffer: Buffer, dpi = 220): Promise<Buff
  * than one subprocess per page.
  */
 export async function extractPdfPagesText(pdfBuffer: Buffer): Promise<string[]> {
-  const dir = await mkdtemp(join(tmpdir(), "tbr-pdftext-"));
+  const dir = await mkdtemp(join(tmpdir(), "bkr-pdftext-"));
   const inputPath = join(dir, "input.pdf");
 
   try {

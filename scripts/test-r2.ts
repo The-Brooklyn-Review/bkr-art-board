@@ -28,7 +28,7 @@ const client = new S3Client({
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET!;
 const KEY = "connectivity-test/hello.txt";
-const CONTENT = `tbr-art-board R2 connectivity test — ${new Date().toISOString()}`;
+const CONTENT = `bkr-art-board R2 connectivity test — ${new Date().toISOString()}`;
 
 async function streamToString(body: unknown): Promise<string> {
   const chunks: Uint8Array[] = [];

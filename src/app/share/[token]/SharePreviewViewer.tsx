@@ -55,7 +55,7 @@ export function SharePreviewViewer({
                 href={`/art-library?asset=${assetId}`}
                 className="inline-block font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
               >
-                Open in TBR Art Board
+                Open in BKR Art Board
               </a>
             </div>
           </div>

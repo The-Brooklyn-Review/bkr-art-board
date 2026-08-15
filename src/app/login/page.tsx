@@ -11,7 +11,7 @@ export default async function LoginPage({
     <main className="min-h-screen flex items-center justify-center bg-bg px-6">
       <div className="w-full max-w-sm">
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-text mb-8">
-          TBR Art Board
+          BKR Art Board
         </h1>
 
         <form action={login} className="flex flex-col gap-3">

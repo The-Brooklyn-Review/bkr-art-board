@@ -1,4 +1,4 @@
-# TBR Art Board
+# BKR Art Board
 
 Internal review tool for The Brooklyn Review's art submissions. Imports submissions from Submittable, renders and classifies every page/image, and gives editors a fast grid + lightbox for reviewing, tagging, and selecting work — including sharing an individual piece outside the tool via a short-lived public link (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#sharing-an-artwork-outside-the-tool)).
 
