@@ -34,6 +34,7 @@ Full script reference, including which ones are read-only vs. mutating and what 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how data flows from Submittable through storage to the review UI, and how the data model is organized.
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — running scripts, the two scheduled GitHub Actions workflows, troubleshooting, environment variables.
 - [`docs/TAGGING.md`](docs/TAGGING.md) — the quarterly Claude API auto-tagging job: schedule, cost, scope, and how to run it manually.
+- [`sql/`](sql/) — SQL applied directly to Supabase, covering the grants and RLS that Prisma doesn't manage.
 
 ## Stack
 
