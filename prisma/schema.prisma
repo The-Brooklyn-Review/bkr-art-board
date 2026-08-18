@@ -14,6 +14,9 @@
 // and docs/ARCHITECTURE.md#sharing-an-artwork-outside-the-tool), written
 // via src/lib/actions/sharePreview.ts.
 //
+// Adding a model? `prisma db push` won't enable RLS on the new table — see
+// docs/OPERATIONS.md#database-access-model for the follow-up.
+//
 // None of these "enum-like" string fields are real Postgres/Prisma enums —
 // validity is enforced only in TypeScript. Valid values, confirmed against
 // actual usage in the codebase:

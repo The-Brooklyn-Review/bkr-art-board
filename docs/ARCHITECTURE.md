@@ -55,6 +55,8 @@ See `prisma/schema.prisma` directly for the full column list and constraints —
 
 Single shared password (`APP_PASSWORD`), not per-user accounts — this is a small internal tool, not a multi-tenant product. Session state is an `httpOnly` cookie set by `src/app/login/actions.ts`; passwords are compared with a timing-safe check, and post-login redirects are validated against open-redirect payloads (`safeNextPath`).
 
+Postgres is reached only through Prisma as the `postgres` role — never Supabase's Data API, `supabase-js`, or Supabase Auth. So there's no `auth.uid()` to write policies against, and the Data API is closed off instead: `anon`/`authenticated` hold no grants, and every table has RLS on with zero policies. See [OPERATIONS.md](./OPERATIONS.md#database-access-model).
+
 ## Frontend
 
 Next.js App Router, two main surfaces:

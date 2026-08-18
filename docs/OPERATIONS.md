@@ -32,12 +32,25 @@ Two GitHub Actions cron jobs, both defined in `.github/workflows/`:
 
 **Known gap:** neither workflow notifies anyone on failure beyond GitHub's own UI. The "Notify on failure" step in `tag-artwork.yml` just echoes to the log and exits non-zero — there's no Slack/email hook. If either job silently starts failing (an expired API key, a schema change that breaks the keepalive query), the only way to find out is checking the Actions tab in GitHub. If the tagging job stops running for a full quarter, next quarter's run will simply pick up a larger backlog — nothing is lost, just delayed.
 
+## Database access model
+
+The app talks to Postgres only through Prisma, as the `postgres` role. Nothing uses Supabase's Data API (PostgREST), `supabase-js`, or Supabase Auth, so that surface is closed rather than policed by policies: `anon` and `authenticated` have no privileges on any table in `public` (nor on future ones), and every table has RLS enabled with **zero policies** — no policy means no row passes. `postgres` and `service_role` have `BYPASSRLS` and are unaffected. Applied by [`sql/001_lock_down_data_api.sql`](../sql/001_lock_down_data_api.sql).
+
+**Adding a Prisma model:** `prisma db push` won't enable RLS on the new table — that's per-table and can't be defaulted. Afterwards:
+
+1. `alter table public.<new_table> enable row level security;`
+2. Add that line to `sql/001_lock_down_data_api.sql`.
+3. Run [`sql/verify_data_api_lockdown.sql`](../sql/verify_data_api_lockdown.sql) — every row must read `locked down`.
+
+The advisor reports `rls_enabled_no_policy` (INFO) for all these tables. That's expected: deny-everything is the intent. Don't silence it by adding permissive policies — that re-opens the tables to the publishable anon key.
+
 ## Troubleshooting
 
 - **Import fails partway through** — `process-submission.ts` marks the specific `SubmissionFile` as `processingStatus: "error"` with the error message in `processingError`; other files in the same run are unaffected. Re-run the script — it only processes files that aren't already `processed`.
 - **Tagging fails for one artwork** — see [`TAGGING.md`](./TAGGING.md#failure-modes). It's always safe to just re-run `tag-all-artwork.ts`.
 - **Images not loading in the UI** — check that `CLOUDFLARE_R2_*` env vars are correct and that the signed URL hasn't expired (they're generated fresh per request, so this usually points at an R2 credentials or bucket-name problem, not expiry). `test-r2.ts` is the fastest way to confirm R2 connectivity in isolation.
 - **DB connection errors** — confirm `DATABASE_URL`/`DIRECT_URL` are current (Supabase connection strings can change if the project is paused and resumed) and that the free-tier project isn't paused. `test-db.ts` isolates this from everything else.
+- **Supabase advisor flags a table as RLS-disabled** — a new table reached the database without step 1 of [Database access model](#database-access-model). Enable RLS on it and add the line to `sql/001_lock_down_data_api.sql`. If the advisor instead suggests `auth.uid() = user_id` policies, ignore that shape: there is no Supabase Auth in this project, and `review_notes.user_id`/`review_actions.user_id` are nullable bookkeeping columns, not auth identities.
 - **Supabase project auto-paused** — free-tier Supabase projects pause after 7 days with no activity. The keepalive workflow exists specifically to prevent this; if it's been disabled or is failing, the project may need to be manually resumed from the Supabase dashboard.
 - **A share link 404s unexpectedly** — this is by design whenever the link is invalid, expired (7 days), or was superseded by a newer share of the same artwork (there's no separate "revoke"; sharing again just replaces the old link). It's also what happens if the artwork was hidden or marked `do_not_use` after the link was created — hiding a piece kills every outstanding share link for it immediately. See [`ARCHITECTURE.md`](./ARCHITECTURE.md#sharing-an-artwork-outside-the-tool). The fix is just to share again from the lightbox.
 
