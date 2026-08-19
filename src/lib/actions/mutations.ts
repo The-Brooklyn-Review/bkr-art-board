@@ -171,7 +171,6 @@ export async function markAssetPublished(assetId: string) {
       }),
     ]);
 
-    revalidatePath("/art-library");
     revalidatePath(`/submissions/${asset.submissionId}`);
   } catch (error) {
     console.error("[markAssetPublished] Error:", {
