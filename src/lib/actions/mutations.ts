@@ -158,15 +158,15 @@ export async function markAssetPublished(assetId: string) {
     await prisma.$transaction([
       prisma.artAsset.update({
         where: { id: assetId },
-        data: { usedState: "published" },
+        data: { usedState: "published", visibleInArtLibrary: false },
       }),
       prisma.reviewAction.create({
         data: {
           submissionId: asset.submissionId,
           artAssetId: assetId,
           actionType: "asset_published",
-          previousValue: { usedState: asset.usedState },
-          newValue: { usedState: "published" },
+          previousValue: { usedState: asset.usedState, visibleInArtLibrary: asset.visibleInArtLibrary },
+          newValue: { usedState: "published", visibleInArtLibrary: false },
         },
       }),
     ]);

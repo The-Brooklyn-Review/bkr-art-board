@@ -85,8 +85,16 @@ export function LightboxFooter({
     setPublishPending(true);
     startTransition(async () => {
       await markAssetPublished(asset.id);
-      setPublished(true);
-      setPublishPending(false);
+
+      // Smart transition: jump to next sibling if available, otherwise return to gallery
+      const nextSibling = siblings.find(({ asset: sib }) => sib.id !== asset.id);
+      if (nextSibling) {
+        setPublished(true);
+        setPublishPending(false);
+        onJumpToSibling(nextSibling.index);
+      } else {
+        onHidden();
+      }
     });
   };
 
@@ -104,7 +112,7 @@ export function LightboxFooter({
       <ConfirmModal
         open={showPublishConfirm}
         title="Mark as published?"
-        message="This will mark the artwork as published. This action cannot be undone."
+        message="This will publish the artwork and remove it from the gallery. This action cannot be undone."
         confirmText="Publish"
         onConfirm={handlePublishConfirmed}
         onCancel={() => setShowPublishConfirm(false)}
