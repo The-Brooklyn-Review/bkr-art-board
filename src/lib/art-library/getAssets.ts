@@ -76,7 +76,7 @@ export interface LibraryAsset {
  */
 export async function getLibraryAssets(): Promise<LibraryAsset[]> {
   const assets = await prisma.artAsset.findMany({
-    where: { visibleInArtLibrary: true, usedState: "available" },
+    where: { visibleInArtLibrary: true },
     include: {
       submission: {
         include: {
