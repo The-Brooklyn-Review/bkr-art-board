@@ -59,7 +59,7 @@ function DensityToggle({
 }
 
 export function ArtLibraryClient({
-  assets,
+  assets: initialAssets,
   submissionCount,
   initialAssetId,
 }: {
@@ -67,17 +67,22 @@ export function ArtLibraryClient({
   submissionCount: number;
   initialAssetId: string | null;
 }) {
+  // Local, mutable copy of the server-fetched list. Publishing or hiding an
+  // asset updates this in place (see removeAsset below) instead of
+  // revalidating the route — that route is expensive to re-render (200+
+  // signed R2 URLs) and doing so from inside the lightbox's own mutation
+  // would fight with the client-side transition to the next asset.
+  const [assets, setAssets] = useState(initialAssets);
   const [search, setSearch] = useState("");
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [density, setDensity] = useState<"compact" | "default" | "large">("default");
-  // Initial value comes from the server-rendered ?asset= param (see
-  // page.tsx) so a shared link opens straight to the right artwork.
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(() => {
-    if (!initialAssetId) return null;
-    const idx = assets.findIndex((a) => a.id === initialAssetId);
-    return idx === -1 ? null : idx;
-  });
+  // Tracked by asset ID rather than index into `filtered` — an index would
+  // go stale the instant `removeAsset` (or a search/filter change) shifts
+  // the array out from under it. Initial value comes from the
+  // server-rendered ?asset= param (see page.tsx) so a shared link opens
+  // straight to the right artwork.
+  const [lightboxAssetId, setLightboxAssetId] = useState<string | null>(initialAssetId);
   const [largeUrls, setLargeUrls] = useState<Record<string, string>>({});
   const [visibleCount, setVisibleCount] = useState(GRID_BATCH_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -195,6 +200,15 @@ export function ArtLibraryClient({
     [filtered, largeUrls],
   );
 
+  // Derived fresh from `filtered` every render, rather than stored as its
+  // own state, so it can never point at a stale position after `filtered`
+  // changes shape (removeAsset, a search edit, a label toggle).
+  const lightboxIndex = useMemo(() => {
+    if (lightboxAssetId === null) return null;
+    const idx = filtered.findIndex((a) => a.id === lightboxAssetId);
+    return idx === -1 ? null : idx;
+  }, [filtered, lightboxAssetId]);
+
   // Tracks asset IDs a prefetch has already been kicked off for (loading or
   // done) — separate from `largeUrls` (done only), so a hover prefetch
   // already in flight doesn't get duplicated by the open-slide effect below,
@@ -241,9 +255,7 @@ export function ArtLibraryClient({
   const currentAsset = lightboxIndex !== null ? filtered[lightboxIndex] : null;
   const siblings = useMemo(() => {
     if (!currentAsset) return [];
-    return filtered
-      .map((a, i) => ({ asset: a, index: i }))
-      .filter(({ asset }) => asset.submissionId === currentAsset.submissionId);
+    return filtered.filter((a) => a.submissionId === currentAsset.submissionId);
   }, [filtered, currentAsset]);
 
   // Deliberately bypasses Next's router (no router.push/replace) — this
@@ -262,19 +274,29 @@ export function ArtLibraryClient({
     else window.history.replaceState(...args);
   }
 
-  function openAsset(index: number) {
-    setLightboxIndex(index);
-    syncUrl(filtered[index]?.id ?? null, "push");
+  function openAsset(assetId: string) {
+    setLightboxAssetId(assetId);
+    syncUrl(assetId, "push");
   }
 
-  function navigateToAsset(index: number) {
-    setLightboxIndex(index);
-    syncUrl(filtered[index]?.id ?? null, "replace");
+  function navigateToAsset(assetId: string) {
+    setLightboxAssetId(assetId);
+    syncUrl(assetId, "replace");
   }
 
   function closeLightbox() {
-    setLightboxIndex(null);
+    setLightboxAssetId(null);
     syncUrl(null, "replace");
+  }
+
+  // Publishing or hiding an asset from the lightbox: drop it from the local
+  // list (so the grid reflects it immediately, no revalidatePath needed —
+  // see mutations.ts) and either advance to the next asset the caller
+  // picked or close the lightbox if there isn't one.
+  function removeAsset(assetId: string, nextAssetId: string | null) {
+    setAssets((prev) => prev.filter((a) => a.id !== assetId));
+    if (nextAssetId) navigateToAsset(nextAssetId);
+    else closeLightbox();
   }
 
   // Browser back/forward — the only case that can change the URL out from
@@ -282,12 +304,11 @@ export function ArtLibraryClient({
   useEffect(() => {
     function onPopState() {
       const assetId = new URLSearchParams(window.location.search).get("asset");
-      const idx = assetId ? filtered.findIndex((a) => a.id === assetId) : -1;
-      setLightboxIndex(idx === -1 ? null : idx);
+      setLightboxAssetId(assetId);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [filtered]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -395,11 +416,11 @@ export function ArtLibraryClient({
               className="flex -ml-4 w-auto"
               columnClassName="pl-4 bg-clip-padding"
             >
-              {visibleAssets.map((asset, i) => (
+              {visibleAssets.map((asset) => (
                 <ArtCard
                   key={asset.id}
                   asset={asset}
-                  onOpen={() => openAsset(i)}
+                  onOpen={() => openAsset(asset.id)}
                   onHoverIntent={() => prefetchLargeUrl(asset.id)}
                 />
               ))}
@@ -417,7 +438,12 @@ export function ArtLibraryClient({
         close={closeLightbox}
         index={lightboxIndex ?? 0}
         slides={slides}
-        on={{ view: ({ index }) => navigateToAsset(index) }}
+        on={{
+          view: ({ index }) => {
+            const target = filtered[index];
+            if (target) navigateToAsset(target.id);
+          },
+        }}
         render={{
           slideFooter: ({ slide }) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -429,7 +455,7 @@ export function ArtLibraryClient({
                 asset={asset}
                 siblings={siblings}
                 onJumpToSibling={navigateToAsset}
-                onHidden={closeLightbox}
+                onAssetRemoved={removeAsset}
               />
             );
           },

@@ -33,7 +33,15 @@ export async function setAssetVisibility(assetId: string, visible: boolean) {
     }),
   ]);
 
-  revalidatePath("/art-library");
+  // No revalidatePath("/art-library") here on purpose: that route is
+  // force-dynamic (always re-fetched fresh on the next real navigation, so
+  // there's nothing stale to invalidate), and this mutation is only ever
+  // called from the art-library lightbox itself. Revalidating the CURRENT
+  // route from inside a Server Action makes Next.js re-render it in the
+  // same response (see Server Actions docs) — that re-signs 200+ thumbnail
+  // URLs and replaces the whole tree, stacking a jarring reload on top of
+  // the lightbox's own close/advance transition. ArtLibraryClient instead
+  // removes the hidden asset from its local state optimistically.
   revalidatePath(`/submissions/${asset.submissionId}`);
 }
 
@@ -165,11 +173,20 @@ export async function markAssetPublished(assetId: string) {
           submissionId: asset.submissionId,
           artAssetId: assetId,
           actionType: "asset_published",
-          previousValue: { usedState: asset.usedState, visibleInArtLibrary: asset.visibleInArtLibrary },
+          previousValue: {
+            usedState: asset.usedState,
+            visibleInArtLibrary: asset.visibleInArtLibrary,
+          },
           newValue: { usedState: "published", visibleInArtLibrary: false },
         },
       }),
     ]);
+
+    // Deliberately no revalidatePath — same reasoning as setAssetVisibility
+    // above. ArtLibraryClient removes the published asset from its local
+    // state and navigates the lightbox itself; server-forcing a re-render
+    // of the current /art-library route here would double up with that as
+    // a visible reload.
   } catch (error) {
     console.error("[markAssetPublished] Error:", {
       assetId,

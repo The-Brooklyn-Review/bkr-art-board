@@ -15,12 +15,20 @@ export function LightboxFooter({
   asset,
   siblings,
   onJumpToSibling,
-  onHidden,
+  onAssetRemoved,
 }: {
   asset: LibraryAsset;
-  siblings: { asset: LibraryAsset; index: number }[];
-  onJumpToSibling: (index: number) => void;
-  onHidden: () => void;
+  siblings: LibraryAsset[];
+  onJumpToSibling: (assetId: string) => void;
+  /**
+   * Called after Hide or Publish successfully changes this asset's
+   * visibility. `nextAssetId` is which asset (if any) the lightbox should
+   * advance to — the caller owns removing `assetId` from its asset list and
+   * navigating, so the grid and lightbox stay in sync without a server
+   * round-trip. Hide always closes (nextAssetId: null); Publish advances to
+   * a sibling page when one exists.
+   */
+  onAssetRemoved: (assetId: string, nextAssetId: string | null) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isStarred, setIsStarred] = useState(false);
@@ -29,7 +37,7 @@ export function LightboxFooter({
   const [showHideConfirm, setShowHideConfirm] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
-  const [published, setPublished] = useState(false);
+  const [publishError, setPublishError] = useState(false);
   const [sharePending, setSharePending] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
@@ -61,7 +69,7 @@ export function LightboxFooter({
     setShowHideConfirm(false);
     startTransition(async () => {
       await setAssetVisibility(asset.id, false);
-      onHidden();
+      onAssetRemoved(asset.id, null);
     });
   };
 
@@ -83,18 +91,24 @@ export function LightboxFooter({
   const handlePublishConfirmed = () => {
     setShowPublishConfirm(false);
     setPublishPending(true);
+    setPublishError(false);
     startTransition(async () => {
-      await markAssetPublished(asset.id);
-
-      // Smart transition: jump to next sibling if available, otherwise return to gallery
-      const nextSibling = siblings.find(({ asset: sib }) => sib.id !== asset.id);
-      if (nextSibling) {
-        setPublished(true);
+      try {
+        await markAssetPublished(asset.id);
+      } catch {
         setPublishPending(false);
-        onJumpToSibling(nextSibling.index);
-      } else {
-        onHidden();
+        setPublishError(true);
+        return;
       }
+
+      // Smart transition: prefer the next page in this submission, fall
+      // back to the previous one, otherwise there's nothing left to review
+      // here — return to the gallery. `siblings` follows the same order as
+      // the grid (submission → file → page), so "next in array order" is a
+      // real next page, not just any other sibling.
+      const pos = siblings.findIndex((sib) => sib.id === asset.id);
+      const next = siblings[pos + 1] ?? (pos > 0 ? siblings[pos - 1] : undefined);
+      onAssetRemoved(asset.id, next?.id ?? null);
     });
   };
 
@@ -117,6 +131,11 @@ export function LightboxFooter({
         onConfirm={handlePublishConfirmed}
         onCancel={() => setShowPublishConfirm(false)}
       />
+      {publishError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10002] bg-red-950/90 border border-red-500 text-red-200 text-sm px-4 py-2 rounded shadow-lg">
+          Couldn&apos;t publish that artwork — please try again.
+        </div>
+      )}
       <CoverLetterModal
         open={showCoverLetter}
         onClose={() => setShowCoverLetter(false)}
@@ -137,7 +156,6 @@ export function LightboxFooter({
           setShowPublishConfirm(true);
         }}
         publishPending={publishPending}
-        published={published}
       />
       <div
         style={{ maxHeight: LIGHTBOX_FOOTER_MAX_HEIGHT }}
@@ -168,10 +186,10 @@ export function LightboxFooter({
             {/* Right: Siblings thumbnails */}
             {siblings.length > 1 && (
               <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 sm:max-w-xs overflow-x-auto scrollbar-hide">
-                {siblings.map(({ asset: sib, index }) => (
+                {siblings.map((sib) => (
                   <button
                     key={sib.id}
-                    onClick={() => onJumpToSibling(index)}
+                    onClick={() => onJumpToSibling(sib.id)}
                     className={`shrink-0 w-12 h-12 border overflow-hidden ${
                       sib.id === asset.id
                         ? "border-accent"
@@ -217,7 +235,6 @@ export function LightboxFooter({
               shareCopied={shareCopied}
               onPublish={() => setShowPublishConfirm(true)}
               publishPending={publishPending}
-              published={published}
             />
           </div>
 
