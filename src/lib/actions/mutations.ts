@@ -170,8 +170,6 @@ export async function markAssetPublished(assetId: string) {
         },
       }),
     ]);
-
-    revalidatePath(`/submissions/${asset.submissionId}`);
   } catch (error) {
     console.error("[markAssetPublished] Error:", {
       assetId,
