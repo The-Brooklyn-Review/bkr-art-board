@@ -105,9 +105,13 @@ export function LightboxFooter({
       // back to the previous one, otherwise there's nothing left to review
       // here — return to the gallery. `siblings` follows the same order as
       // the grid (submission → file → page), so "next in array order" is a
-      // real next page, not just any other sibling.
+      // real next page, not just any other sibling. `pos` should always be
+      // found (this asset is necessarily its own sibling) — the -1 guard is
+      // just so a lookup miss falls back to closing instead of silently
+      // picking siblings[0] via the -1+1 arithmetic.
       const pos = siblings.findIndex((sib) => sib.id === asset.id);
-      const next = siblings[pos + 1] ?? (pos > 0 ? siblings[pos - 1] : undefined);
+      const next = pos === -1 ? undefined : (siblings[pos + 1] ?? siblings[pos - 1]);
+      setPublishPending(false);
       onAssetRemoved(asset.id, next?.id ?? null);
     });
   };
