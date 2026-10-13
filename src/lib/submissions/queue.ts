@@ -3,7 +3,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSignedR2Url } from "@/lib/storage/r2";
-import { tinyKeyFor } from "@/lib/storage/tiny";
+import { signTiny } from "@/lib/storage/tiny";
 import { DECIDED_STATUSES } from "@/lib/submittable/statuses";
 import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
@@ -140,7 +140,6 @@ export async function getQueue(
         r.assets.find((a) => a.visibleInArtLibrary)?.storagePathThumbnail ??
         r.assets[0]?.storagePathThumbnail ??
         null;
-      const tiny = cover ? tinyKeyFor(cover) : null;
       return {
         id: r.id,
         artistName: r.artistName,
@@ -169,7 +168,7 @@ export async function getQueue(
         })),
         pageCount: r.assets.length,
         thumbnailUrl: withThumbs && cover ? await getSignedR2Url(cover) : null,
-        tinyUrl: withThumbs && tiny ? await getSignedR2Url(tiny) : null,
+        tinyUrl: withThumbs && cover ? await signTiny(cover) : null,
       };
     }),
   );

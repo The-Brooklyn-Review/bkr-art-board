@@ -28,6 +28,7 @@ import { DECISION_TONE } from "@/components/review/DecisionChip";
 import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
 import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 import { SyncStatus } from "@/components/review/SyncStatus";
+import { TinyThumb } from "@/components/review/TinyThumb";
 import { ArrowLeftIcon, ChevronIcon, ExternalIcon } from "@/components/review/icons";
 import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
 
@@ -400,13 +401,11 @@ export function SubmissionReviewClient({
                     i === pageIndex ? "border-accent" : "border-border opacity-60 hover:opacity-100"
                   }`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={a.thumbnailUrl}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className={`w-full h-full object-cover ${a.visibleInArtLibrary ? "" : "opacity-40"}`}
+                  <TinyThumb
+                    key={a.thumbnailUrl}
+                    tinyUrl={a.tinyUrl}
+                    thumbnailUrl={a.thumbnailUrl}
+                    className={a.visibleInArtLibrary ? "" : "opacity-40"}
                   />
                   {!a.visibleInArtLibrary && (
                     <span className="absolute top-0.5 right-0.5 bg-bg/85 p-0.5 text-text-muted">

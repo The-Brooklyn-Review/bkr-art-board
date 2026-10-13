@@ -12,7 +12,7 @@ import { AppHeader, PageTitle } from "@/components/review/AppHeader";
 import { isSyncStale } from "@/lib/sync/autoSync";
 import { QueueFilterBar } from "@/components/review/QueueFilterBar";
 import { DecisionChip } from "@/components/review/DecisionChip";
-import { RowThumb } from "@/components/review/RowThumb";
+import { TinyThumb } from "@/components/review/TinyThumb";
 
 // Signs a thumbnail URL per row per request — must not be cached.
 export const dynamic = "force-dynamic";
@@ -117,7 +117,7 @@ export default async function SubmissionsPage({
                     >
                       <div className="row-span-2 sm:row-span-1 self-start sm:self-center w-14 h-14 sm:w-16 sm:h-16 bg-surface border border-border overflow-hidden">
                         {r.thumbnailUrl ? (
-                          <RowThumb
+                          <TinyThumb
                             key={r.thumbnailUrl}
                             tinyUrl={r.tinyUrl}
                             thumbnailUrl={r.thumbnailUrl}

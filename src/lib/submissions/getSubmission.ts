@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/db";
 import { submissionDateOf } from "@/lib/submittable/readingPeriod";
 import { getSignedR2Url } from "@/lib/storage/r2";
+import { signTiny } from "@/lib/storage/tiny";
 
 export interface ReviewAsset {
   id: string;
   largeUrl: string;
   thumbnailUrl: string;
+  /** For the page strip; may not exist yet (see TinyThumb). */
+  tinyUrl: string | null;
   assetType: string;
   pageNumber: number | null;
   fileIndex: number | null;
@@ -96,6 +99,7 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
         id: asset.id,
         largeUrl: await getSignedR2Url(asset.storagePathLarge),
         thumbnailUrl: await getSignedR2Url(asset.storagePathThumbnail),
+        tinyUrl: await signTiny(asset.storagePathThumbnail),
         assetType: asset.assetType,
         pageNumber: asset.pageNumber,
         fileIndex: asset.fileIndex,

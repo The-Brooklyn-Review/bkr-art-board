@@ -3,18 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * The review list's 64px cover image. Shows the tiny variant and falls back
- * to the regular thumbnail if it hasn't been generated for this artwork
- * (see src/lib/storage/tiny.ts).
+ * A small square image (review list rows, the reviewer's page strip). Shows
+ * the tiny variant and falls back to the regular thumbnail if it hasn't
+ * been generated for this artwork (see src/lib/storage/tiny.ts).
  */
-export function RowThumb({
+export function TinyThumb({
   tinyUrl,
   thumbnailUrl,
-  eager,
+  eager = false,
+  className = "",
 }: {
   tinyUrl: string | null;
   thumbnailUrl: string;
-  eager: boolean;
+  eager?: boolean;
+  className?: string;
 }) {
   const [src, setSrc] = useState(tinyUrl ?? thumbnailUrl);
   const ref = useRef<HTMLImageElement>(null);
@@ -36,7 +38,7 @@ export function RowThumb({
       alt=""
       loading={eager ? "eager" : "lazy"}
       decoding="async"
-      className="w-full h-full object-cover"
+      className={`w-full h-full object-cover ${className}`}
     />
   );
 }
