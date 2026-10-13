@@ -15,6 +15,7 @@ import { DecisionChip } from "@/components/review/DecisionChip";
 
 // Signs a thumbnail URL per row per request — must not be cached.
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Review · BKR Art Board" };
 // The background sync and "Sync now" run as server actions on this page.
 export const maxDuration = 120;
 

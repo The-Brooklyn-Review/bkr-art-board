@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/format";
 // relies on this too: it updates the address bar via the raw History API
 // instead of Next's router specifically to avoid re-triggering this fetch.
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Gallery · BKR Art Board" };
 // The background Submittable sync runs as a server action on this page.
 export const maxDuration = 120;
 

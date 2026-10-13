@@ -14,6 +14,7 @@ import { SubmissionReviewClient } from "@/components/submissions/SubmissionRevie
 // getSubmission() signs short-lived R2 URLs per request — caching this
 // route would serve expired image links.
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Review · BKR Art Board" };
 export const maxDuration = 120;
 
 export default async function SubmissionReviewPage({

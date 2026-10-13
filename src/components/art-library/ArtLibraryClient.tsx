@@ -91,6 +91,14 @@ export function ArtLibraryClient({
   // signed R2 URLs) and doing so from inside the lightbox's own mutation
   // would fight with the client-side transition to the next asset.
   const [assets, setAssets] = useState(initialAssets);
+  // A new server list (e.g. "Include published artists" toggled) replaces
+  // the local copy. Without this the grid and the artwork count kept the
+  // first list while only the submission count (a prop) changed.
+  const [shownList, setShownList] = useState(initialAssets);
+  if (initialAssets !== shownList) {
+    setShownList(initialAssets);
+    setAssets(initialAssets);
+  }
   const [search, setSearch] = useState("");
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
@@ -318,7 +326,9 @@ export function ArtLibraryClient({
     <div className="min-h-screen bg-bg text-text">
       <AppHeader nav={<AppNav current="gallery" reviewerName={reviewerName} sync={sync} />}>
         <PageTitle
-          title="Visual Arts Library"
+          // The tab names the place (Gallery); the heading says what's in it,
+          // the way Review's heading says "Assigned to you".
+          title={includePublished ? "Under consideration & published" : "Under consideration"}
           meta={
             <>
               <p>
@@ -331,12 +341,14 @@ export function ArtLibraryClient({
                 href={includePublished ? "/art-library" : "/art-library?published=1"}
                 role="switch"
                 aria-checked={includePublished}
-                className="group hidden sm:flex items-center gap-2 normal-case tracking-normal text-text-muted hover:text-text"
+                // items-baseline + a self-centred switch: the link's baseline
+                // comes from its text, so it lines up with the counts beside it.
+                className="group hidden sm:inline-flex items-baseline gap-2 normal-case tracking-normal text-text-muted hover:text-text"
                 title="Also show work from submissions already accepted in Submittable"
               >
                 <span
                   aria-hidden
-                  className={`relative w-6 h-3.5 rounded-full border transition-colors ${
+                  className={`relative self-center w-6 h-3.5 rounded-full border transition-colors ${
                     includePublished ? "bg-accent border-accent" : "border-text-muted/60"
                   }`}
                 >
