@@ -1,11 +1,11 @@
 import { getCurrentReviewer } from "@/lib/reviewer/identity";
-import { getLibraryAssets } from "@/lib/art-library/getAssets";
+import { getGalleryData } from "@/lib/art-library/getAssets";
 import { ArtLibraryClient } from "@/components/art-library/ArtLibraryClient";
 import { lastSyncedAt } from "@/lib/sync/syncSubmittable";
 import { isSyncStale } from "@/lib/sync/autoSync";
 import { formatDateTime } from "@/lib/format";
 
-// getLibraryAssets() signs 200+ short-lived R2 URLs per request — caching
+// getGalleryData() signs 200+ short-lived R2 URLs per request — caching
 // this route would serve expired image links. ArtLibraryClient's syncUrl()
 // relies on this too: it updates the address bar via the raw History API
 // instead of Next's router specifically to avoid re-triggering this fetch.
@@ -21,16 +21,16 @@ export default async function ArtLibraryPage({
 }) {
   const { asset, published } = await searchParams;
   const includePublished = published === "1";
-  const [assets, reviewer, synced] = await Promise.all([
-    getLibraryAssets({ includePublished }),
+  const [data, reviewer, synced] = await Promise.all([
+    getGalleryData({ includePublished }),
     getCurrentReviewer(),
     lastSyncedAt(),
   ]);
 
   return (
     <ArtLibraryClient
-      assets={assets}
-      submissionCount={new Set(assets.map((a) => a.submissionId)).size}
+      data={data}
+      submissionCount={Object.keys(data.submissions).length}
       initialAssetId={asset ?? null}
       includePublished={includePublished}
       reviewerName={reviewer?.displayName ?? null}
