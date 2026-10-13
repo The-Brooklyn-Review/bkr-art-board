@@ -95,7 +95,7 @@ The importer's header claim that source-tier fields are "never updated after imp
 
 - `SubmittableLabel`: add `active Boolean`, `isConcealed Boolean`.
 - Reviewer label allowlist (by **label ID**, resolved once from names, case-insensitive — Submittable casing is inconsistent: `landscape`, `A Grade`, `B GRADE`):
-  Landscape, Photography, Figurative, Painting/Drawing, Multimedia, Abstract, Collage, A Grade, B Grade.
+  Landscape, Photography, Figurative, Painting/Drawing, Multimedia, Abstract, Collage, Sculpture/Textile/Object, A Grade, B Grade.
   Stored as config (a small table or a constant of IDs), displayed with BKR's capitalisation and Submittable's colours. `Consider` and `acceptance` are **not** in the picker — editors set those in Submittable.
 - Update `src/lib/art-library/labels.ts` `KNOWN_LABELS` to include the two grades.
 

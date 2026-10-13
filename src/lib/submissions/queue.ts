@@ -8,7 +8,7 @@ import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
 import type { QueueFilters } from "@/lib/submissions/filters";
 
-/** Labels shown and filterable in the reviewer: the 9 art labels plus Consider. */
+/** Labels shown and filterable in the reviewer: the art labels plus Consider. */
 export const CONSIDER_LABEL_ID = "12f06803-c610-4662-b1a6-ed88be42a8b2";
 export const FILTER_LABELS = [
   ...REVIEWER_LABELS,
