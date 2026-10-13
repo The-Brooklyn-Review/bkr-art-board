@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronIcon } from "@/components/review/icons";
 
 // A menu: a button that shows its current value, and a panel of choices.
 // Desktop: a popover anchored to the button. Phones: a bottom sheet — a
@@ -158,13 +159,10 @@ export function Menu({
 
 export function Chevron({ open = false }: { open?: boolean }) {
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 10 6"
-      className={`w-2.5 h-2.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-    >
-      <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
+    <ChevronIcon
+      dir="down"
+      className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+    />
   );
 }
 

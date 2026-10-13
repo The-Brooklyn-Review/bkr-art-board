@@ -27,6 +27,7 @@ import { DECISION_TONE } from "@/components/review/DecisionChip";
 import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
 import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 import { SyncStatus } from "@/components/review/SyncStatus";
+import { ArrowLeftIcon, ChevronIcon, ExternalIcon } from "@/components/review/icons";
 import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
 
 interface QueueItem {
@@ -191,7 +192,7 @@ export function SubmissionReviewClient({
     // three columns scroll, each on its own.
     <div className="bg-bg text-text flex flex-col pb-24 lg:pb-0 lg:fixed lg:inset-0 lg:overflow-clip">
       {/* Top bar: where you are in the queue, and how to move through it */}
-      <header className="border-b border-border px-4 sm:px-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
+      <header className="border-b border-border px-4 lg:pr-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
         <button
           type="button"
           onClick={toggleQueue}
@@ -202,8 +203,12 @@ export function SubmissionReviewClient({
         >
           <SidebarIcon />
         </button>
-        <Link href={listHref} className="text-text-muted hover:text-text whitespace-nowrap">
-          ← <span className="hidden sm:inline">Review list</span>
+        <Link
+          href={listHref}
+          className="flex items-center gap-1.5 text-text-muted hover:text-text whitespace-nowrap"
+        >
+          <ArrowLeftIcon />
+          <span className="hidden sm:inline">Review list</span>
           <span className="sm:hidden">List</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -215,7 +220,8 @@ export function SubmissionReviewClient({
             title="Previous submission (K)"
             aria-label="Previous submission"
           >
-            ‹<span className="hidden sm:inline">Previous</span>
+            <ChevronIcon dir="left" />
+            <span className="hidden sm:inline">Previous</span>
           </button>
           <span className="text-text-muted tabular-nums whitespace-nowrap text-xs sm:text-sm">
             {position.index >= 0 ? `${position.index + 1} of ${position.total}` : "Not in list"}
@@ -228,7 +234,8 @@ export function SubmissionReviewClient({
             title="Next submission (J)"
             aria-label="Next submission"
           >
-            <span className="hidden sm:inline">Next</span>›
+            <span className="hidden sm:inline">Next</span>
+            <ChevronIcon dir="right" />
           </button>
         </div>
         <div className="ml-auto flex items-center gap-4">
@@ -254,7 +261,7 @@ export function SubmissionReviewClient({
                   <Link
                     href={`/submissions/${item.id}${query}`}
                     aria-current={item.id === submission.id ? "page" : undefined}
-                    className={`flex items-start gap-2 px-3 py-2 border-b border-border text-sm ${
+                    className={`flex items-start gap-2 px-4 py-2 border-b border-border text-sm ${
                       item.id === submission.id
                         ? "bg-surface text-text shadow-[inset_2px_0_0_var(--color-accent)]"
                         : "text-text-muted hover:text-text hover:bg-bg-hover"
@@ -331,19 +338,19 @@ export function SubmissionReviewClient({
                   type="button"
                   onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
                   disabled={pageIndex === 0}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-bg/70 border border-border text-text disabled:opacity-0"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-bg/70 border border-border text-text hover:border-accent disabled:opacity-0"
                   aria-label="Previous page"
                 >
-                  ‹
+                  <ChevronIcon dir="left" className="w-5 h-5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setPageIndex((i) => Math.min(submission.assets.length - 1, i + 1))}
                   disabled={pageIndex === submission.assets.length - 1}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-bg/70 border border-border text-text disabled:opacity-0"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-bg/70 border border-border text-text hover:border-accent disabled:opacity-0"
                   aria-label="Next page"
                 >
-                  ›
+                  <ChevronIcon dir="right" className="w-5 h-5" />
                 </button>
               </>
             )}
@@ -538,7 +545,10 @@ function Section({
   sectionRef?: React.RefObject<HTMLElement | null>;
 }) {
   return (
-    <section ref={sectionRef} className="px-5 py-4 border-b border-border scroll-mt-4">
+    <section
+      ref={sectionRef}
+      className="px-4 lg:px-6 py-5 border-b border-border last:border-b-0 scroll-mt-4"
+    >
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="font-[family-name:var(--font-display)] text-base text-text">{title}</h2>
         {aside}
@@ -572,7 +582,7 @@ function SubmissionHeader({
     </>
   );
   return (
-    <div className="px-5 pt-5 pb-5 border-b border-border">
+    <div className="px-4 lg:px-6 pt-5 pb-5 border-b border-border">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-[family-name:var(--font-display)] text-[1.75rem] leading-tight">
@@ -592,7 +602,7 @@ function SubmissionHeader({
             className="shrink-0 mt-1 flex items-center gap-1 border border-border px-2 py-1 text-xs text-text-muted hover:text-text hover:border-text-muted transition-colors"
             title="Open this submission in Submittable"
           >
-            Submittable <span aria-hidden>↗</span>
+            Submittable <ExternalIcon className="w-3 h-3" />
           </a>
         )}
       </div>
@@ -971,7 +981,7 @@ function LabelPicker({
   return (
     <Section
       title="Labels"
-      aside={<span className="text-xs text-text-muted">Saved to Submittable</span>}
+      aside={<span className="text-xs text-text-muted">Changes sync to Submittable</span>}
     >
       <div className="flex flex-wrap gap-1.5">
         {catalog.map((l) => {
@@ -982,6 +992,11 @@ function LabelPicker({
               key={l.id}
               onClick={() => toggle(l.id)}
               aria-pressed={active}
+              title={
+                active
+                  ? `Remove “${l.name}” — removes it in Submittable too`
+                  : `Add “${l.name}” — adds it in Submittable too`
+              }
               disabled={busy !== null}
               className={`text-xs px-2.5 py-1.5 border transition-colors disabled:cursor-wait ${
                 active
@@ -1196,10 +1211,10 @@ function MobileDecisionBar({
             type="button"
             onClick={onNext}
             disabled={!nextId}
-            className="border border-border px-3 py-2.5 text-sm text-text-muted disabled:opacity-30"
+            className="flex items-center gap-1 border border-border px-3 py-2.5 text-sm text-text-muted disabled:opacity-30"
             aria-label="Next submission"
           >
-            Next ›
+            Next <ChevronIcon dir="right" />
           </button>
         </div>
       )}

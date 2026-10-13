@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import { ChevronIcon } from "@/components/review/icons";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
 import { createShareLink } from "@/lib/actions/sharePreview";
@@ -282,7 +283,7 @@ export function LightboxFooter({
                 className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text transition-colors py-2 shrink-0 cursor-pointer"
               >
                 More actions
-                <span aria-hidden>›</span>
+                <ChevronIcon dir="right" className="w-3 h-3" />
               </button>
             </div>
           </div>
