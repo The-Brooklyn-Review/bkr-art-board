@@ -26,9 +26,7 @@ export function isCorrectPassword(candidate: string): boolean {
   // strings — a plain === short-circuits on the first mismatched
   // character, and timingSafeEqual itself throws on mismatched buffer
   // lengths, which a raw password comparison would hit directly. Hashing
-  // first sidesteps both. Login already adds a flat 1s delay before this
-  // ever runs (see login/actions.ts), which alone already swamps this at
-  // the network level — this is defense in depth, not the primary
-  // mitigation.
+  // first sidesteps both. Guessing itself is limited by a Vercel Firewall
+  // rate-limit rule on POST /login (see login/actions.ts).
   return timingSafeEqual(hashBuffer(candidate), hashBuffer(password));
 }

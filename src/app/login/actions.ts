@@ -15,12 +15,14 @@ export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const next = safeNextPath(String(formData.get("next") ?? DEFAULT_NEXT));
 
-  // Single shared password, no per-account lockout — this is the cheap
-  // mitigation: every attempt (success or failure) costs a fixed second,
-  // capping brute-force guessing at ~60/min regardless of how it's
-  // automated. Applied unconditionally so response timing itself doesn't
-  // leak whether a guess was close.
-  await new Promise((r) => setTimeout(r, 1000));
+  // Single shared password, no per-account lockout. The real limit on
+  // guessing is a Vercel Firewall rate-limit rule on POST /login (see
+  // docs/OPERATIONS.md) — a delay here can't cap it on its own, since
+  // attempts can run in parallel. This small flat delay just slows a
+  // single scripted loop, without making every real sign-in wait. Applied
+  // to every attempt: delaying only failures would let a script give up on
+  // any slow response and learn the answer anyway.
+  await new Promise((r) => setTimeout(r, 250));
 
   if (!isCorrectPassword(password)) {
     redirect(`/login?error=1&next=${encodeURIComponent(next)}`);

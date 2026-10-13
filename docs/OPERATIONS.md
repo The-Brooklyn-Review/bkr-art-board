@@ -50,6 +50,15 @@ The app talks to Postgres only through Prisma, as the `postgres` role. Nothing u
 
 The advisor reports `rls_enabled_no_policy` (INFO) for all these tables. That's expected: deny-everything is the intent. Don't silence it by adding permissive policies — that re-opens the tables to the publishable anon key.
 
+## Login rate limit
+
+There's one shared password, so guessing is limited at Vercel's edge, not in code: a **Vercel Firewall** rate-limit rule on the project (Firewall → Configure → New Rule):
+
+- **If** Request Path _equals_ `/login` **and** Method _equals_ `POST` (the sign-in form posts there; viewing the page is a GET and isn't counted)
+- **Then** Rate Limit — Fixed Window, **60s**, **10 requests**, keyed by **IP**, action **Deny**
+
+Included on the Hobby plan (one rate-limit rule per project, 1M checked requests/month; only requests matching the rule count). `login/actions.ts` also waits a flat 250 ms per attempt — not a real limit on its own, since attempts can run in parallel. If people get "too many requests" signing in from a shared office network, raise the request count.
+
 ## Troubleshooting
 
 - **Import fails partway through** — `process-submission.ts` marks the specific `SubmissionFile` as `processingStatus: "error"` with the error message in `processingError`; other files in the same run are unaffected. Re-run the script — it only processes files that aren't already `processed`.

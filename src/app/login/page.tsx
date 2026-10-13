@@ -1,4 +1,5 @@
 import { login } from "./actions";
+import { SubmitButton } from "./SubmitButton";
 
 export default async function LoginPage({
   searchParams,
@@ -24,12 +25,7 @@ export default async function LoginPage({
             required
             className="bg-surface border border-border text-text px-4 py-3 rounded-none outline-none focus:border-accent transition-colors"
           />
-          <button
-            type="submit"
-            className="bg-accent text-bg px-4 py-3 font-medium hover:opacity-90 transition-opacity"
-          >
-            Enter
-          </button>
+          <SubmitButton />
           {error && <p className="text-sm text-red-400 mt-1">Incorrect password.</p>}
         </form>
       </div>
