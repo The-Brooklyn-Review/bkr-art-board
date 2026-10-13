@@ -45,16 +45,35 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string)
 }
 
 /**
- * Private files — never a public bucket URL. Callers mint short-lived
- * signed URLs on demand. Default is 6h, not 1h — long review sessions
- * (an editor with a tab open through lunch) were hitting broken images
- * mid-session with the old 1h expiry. Still short-lived, just not
- * aggressively so, since these are never meant to be permanent links.
+ * Private files — never a public bucket URL. Callers mint signed URLs on
+ * demand.
+ *
+ * Signed in fixed 6-hour windows (the signing time is rounded down to the
+ * window start, the URL lasts 12h), so the same image gets the same URL for
+ * hours instead of a new one on every page load. A new URL each time meant
+ * the browser could never reuse what it had downloaded: every visit to the
+ * review list or gallery re-fetched every image. The response also carries
+ * a Cache-Control header (via response-cache-control) so the browser keeps
+ * it. Every URL handed out stays valid for at least 6h — long review
+ * sessions (a tab open through lunch) don't hit broken images.
  */
-export async function getSignedR2Url(key: string, expiresInSeconds = 21600): Promise<string> {
-  return getSignedUrl(client(), new GetObjectCommand({ Bucket: BUCKET(), Key: key }), {
-    expiresIn: expiresInSeconds,
-  });
+const SIGNING_WINDOW_MS = 6 * 60 * 60 * 1000;
+const URL_LIFETIME_S = 12 * 60 * 60;
+
+export function signingWindowStart(now = Date.now()): Date {
+  return new Date(Math.floor(now / SIGNING_WINDOW_MS) * SIGNING_WINDOW_MS);
+}
+
+export async function getSignedR2Url(key: string): Promise<string> {
+  return getSignedUrl(
+    client(),
+    new GetObjectCommand({
+      Bucket: BUCKET(),
+      Key: key,
+      ResponseCacheControl: "private, max-age=21600, immutable",
+    }),
+    { expiresIn: URL_LIFETIME_S, signingDate: signingWindowStart() },
+  );
 }
 
 /**
