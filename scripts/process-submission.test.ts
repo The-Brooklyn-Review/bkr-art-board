@@ -36,6 +36,8 @@ function preparedAsset(pageNumber: number | null): PreparedAsset {
     largeBuffer: Buffer.from("large"),
     thumbKey: `key-${pageNumber}-thumb.webp`,
     thumbBuffer: Buffer.from("thumb"),
+    tinyKey: `key-${pageNumber}-tiny.webp`,
+    tinyBuffer: Buffer.from("tiny"),
     width: 100,
     height: 100,
     aspectRatio: 1,
@@ -65,7 +67,7 @@ describe("replaceFileAssets", () => {
 
     await replaceFileAssets("sub-1", { id: "file-1" }, prepared, 0);
 
-    expect(mockUploadToR2).toHaveBeenCalledTimes(4); // large + thumb, per asset
+    expect(mockUploadToR2).toHaveBeenCalledTimes(6); // large + thumb + tiny, per asset
     expect(mockPrisma.artAsset.deleteMany).toHaveBeenCalledWith({
       where: { submissionFileId: "file-1" },
     });

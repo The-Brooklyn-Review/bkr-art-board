@@ -11,6 +11,7 @@ import { fetchAllPages } from "@/lib/submittable/client";
 import type { Label, ListProject, SubmissionListItem } from "@/lib/submittable/types";
 import { getTeamMembers, teamMemberName } from "@/lib/submittable/writes";
 import { deleteFromR2 } from "@/lib/storage/r2";
+import { tinyKeyFor } from "@/lib/storage/tiny";
 import { planSync, sameSet, type RemoteSubmission } from "@/lib/sync/plan";
 
 export interface SyncOptions {
@@ -300,7 +301,11 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
         }),
       ]);
       await deleteFromR2([
-        ...assets.flatMap((a) => [a.storagePathLarge, a.storagePathThumbnail]),
+        ...assets.flatMap((a) => [
+          a.storagePathLarge,
+          a.storagePathThumbnail,
+          tinyKeyFor(a.storagePathThumbnail) ?? "",
+        ]),
         ...files.map((f) => f.storagePathOriginal),
       ]);
       await prisma.$transaction([
