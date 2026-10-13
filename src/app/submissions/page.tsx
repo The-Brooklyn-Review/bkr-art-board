@@ -88,71 +88,98 @@ export default async function SubmissionsPage({
             statusCounts={statusCounts}
           />
         ) : (
-          <ol>
-            {rows.map((r, i) => (
-              <li key={r.id} className="border-b border-border">
-                <Link
-                  href={`/submissions/${r.id}${query}`}
-                  className="grid grid-cols-[56px_1fr] sm:grid-cols-[72px_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.6fr)_auto] items-center gap-x-4 gap-y-1 py-3 px-1 hover:bg-surface focus-visible:bg-surface outline-none transition-colors"
-                >
-                  <div className="row-span-3 sm:row-span-1 w-14 h-14 sm:w-[72px] sm:h-[72px] bg-surface border border-border overflow-hidden">
-                    {r.thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={r.thumbnailUrl}
-                        alt=""
-                        loading={i < 12 ? "eager" : "lazy"}
-                        decoding="async"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="block w-full h-full" aria-hidden />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-[family-name:var(--font-display)] text-lg leading-tight truncate">
-                      {r.artistName ?? "Unknown artist"}
-                    </p>
-                    <p className="text-sm text-text-muted truncate">
-                      {r.submissionTitle || "Untitled"} · {r.pageCount}{" "}
-                      {r.pageCount === 1 ? "page" : "pages"}
-                    </p>
-                  </div>
-                  <div className="min-w-0 text-xs text-text-muted flex flex-wrap gap-x-2 gap-y-1">
-                    {r.labels.length
-                      ? r.labels.map((l) => (
-                          <span key={l.submittableLabelId} className="whitespace-nowrap">
-                            {l.name}
-                          </span>
-                        ))
-                      : null}
-                  </div>
-                  <div className="min-w-0 flex flex-wrap gap-1.5 items-center">
-                    {r.decisions.length
-                      ? r.decisions.map((d) => (
-                          <DecisionChip
-                            key={`${d.reviewerId ?? d.reviewerName}`}
-                            reviewerName={d.reviewerName}
-                            decision={d.decision}
-                            pushStatus={d.pushStatus}
-                            compact
+          <>
+            {/* Column heads: what each column is, so metadata scans as a table. */}
+            <div
+              aria-hidden
+              className={`hidden sm:grid ${ROW_COLS(filters.status === "all")} gap-x-5 px-1 pt-4 pb-2 text-xs text-text-muted border-b border-border`}
+            >
+              <span />
+              <span>Submission</span>
+              <span>Labels</span>
+              <span>Decisions</span>
+              <span>Assigned to</span>
+              {filters.status === "all" && <span>Status</span>}
+            </div>
+            <ol>
+              {rows.map((r, i) => {
+                const mineFirst = [...r.decisions].sort(
+                  (a, b) =>
+                    Number(b.reviewerId === reviewer.id) - Number(a.reviewerId === reviewer.id),
+                );
+                return (
+                  <li key={r.id} className="border-b border-border">
+                    <Link
+                      href={`/submissions/${r.id}${query}`}
+                      className={`grid grid-cols-[56px_minmax(0,1fr)] ${ROW_COLS(filters.status === "all")} items-center gap-x-4 sm:gap-x-5 gap-y-1.5 py-3 px-1 hover:bg-bg-hover focus-visible:bg-bg-hover outline-none transition-colors`}
+                    >
+                      <div className="row-span-2 sm:row-span-1 self-start sm:self-center w-14 h-14 sm:w-16 sm:h-16 bg-surface border border-border overflow-hidden">
+                        {r.thumbnailUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.thumbnailUrl}
+                            alt=""
+                            loading={i < 12 ? "eager" : "lazy"}
+                            decoding="async"
+                            className="w-full h-full object-cover"
                           />
-                        ))
-                      : null}
-                    <AssignmentNote
-                      reviewers={r.reviewers}
-                      meId={reviewer.id}
-                      filteredToMe={filters.assigned === "me"}
-                    />
-                  </div>
-                  <span className="hidden sm:inline text-xs text-text-muted whitespace-nowrap">
-                    {/* Only informative when the list mixes statuses. */}
-                    {filters.status === "all" ? displayStatus(r.officialStatus) : ""}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
+                        ) : (
+                          <span className="block w-full h-full" aria-hidden />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-[family-name:var(--font-display)] text-lg leading-snug truncate">
+                          {r.artistName ?? "Unknown artist"}
+                        </p>
+                        <p className="text-sm truncate">
+                          <span className="italic text-text/80">
+                            {r.submissionTitle || "Untitled"}
+                          </span>
+                          <span className="text-text-muted">
+                            {" · "}
+                            {r.pageCount} {r.pageCount === 1 ? "page" : "pages"}
+                          </span>
+                        </p>
+                      </div>
+                      {/* Phones: labels and decisions share one line under the title. */}
+                      <div className="col-start-2 sm:col-start-auto min-w-0 flex flex-wrap items-center gap-1.5 sm:contents">
+                        <div className="min-w-0 flex flex-wrap gap-1 empty:hidden sm:empty:block">
+                          {r.labels.map((l) => (
+                            <span
+                              key={l.submittableLabelId}
+                              className="whitespace-nowrap border border-border px-1.5 py-px text-[11px] text-text-muted"
+                            >
+                              {l.name}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="order-first sm:order-none min-w-0 flex flex-wrap gap-1.5 items-center empty:hidden sm:empty:block">
+                          {mineFirst.map((d) => (
+                            <DecisionChip
+                              key={`${d.reviewerId ?? d.reviewerName}`}
+                              reviewerName={d.reviewerName}
+                              who={d.reviewerId === reviewer.id ? "You" : firstName(d.reviewerName)}
+                              decision={d.decision}
+                              pushStatus={d.pushStatus}
+                              compact
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="hidden sm:block min-w-0 truncate text-sm text-text-muted">
+                        {assignedText(r.reviewers, reviewer.id)}
+                      </span>
+                      {filters.status === "all" && (
+                        <span className="hidden sm:block text-xs text-text-muted whitespace-nowrap">
+                          {displayStatus(r.officialStatus)}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+          </>
         )}
       </main>
     </div>
@@ -259,29 +286,23 @@ function displayGroup(g: StatusGroup): string {
   return STATUS_GROUPS.find((x) => x.value === g)?.label.toLowerCase() ?? "";
 }
 
-/** Who else is on it — "Assigned to you" filtering makes your own name noise. */
-function AssignmentNote({
-  reviewers,
-  meId,
-  filteredToMe,
-}: {
-  reviewers: { id: string; name: string }[];
-  meId: string;
-  filteredToMe: boolean;
-}) {
+/** Shared by the column heads and the rows so they always line up. */
+function ROW_COLS(withStatus: boolean): string {
+  return withStatus
+    ? "sm:grid-cols-[64px_minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1fr)_6rem]"
+    : "sm:grid-cols-[64px_minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1fr)]";
+}
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** "You", "Jaden Schoenfeld", "You and Jaden" — you first, never initials. */
+function assignedText(reviewers: { id: string; name: string }[], meId: string): string {
+  if (reviewers.length === 0) return "Unassigned";
+  const me = reviewers.some((r) => r.id === meId);
   const others = reviewers.filter((r) => r.id !== meId);
-  if (filteredToMe) {
-    return others.length ? (
-      <span className="text-xs text-text-muted">
-        With {others.map((r) => r.name).join(" and ")}
-      </span>
-    ) : null;
-  }
-  return (
-    <span className="text-xs text-text-muted">
-      {reviewers.length
-        ? reviewers.map((r) => (r.id === meId ? "You" : r.name)).join(" and ")
-        : "Unassigned"}
-    </span>
-  );
+  if (!me) return others.map((r) => r.name).join(" and ");
+  if (others.length === 0) return "You";
+  return `You and ${others.map((r) => firstName(r.name)).join(" and ")}`;
 }

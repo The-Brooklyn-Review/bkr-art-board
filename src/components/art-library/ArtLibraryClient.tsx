@@ -13,6 +13,14 @@ import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 import Link from "next/link";
 import { AppNav } from "@/components/review/AppNav";
 import { AppHeader, PageTitle } from "@/components/review/AppHeader";
+import {
+  Menu,
+  MenuCheckbox,
+  MenuDivider,
+  MenuHeading,
+  MenuLink,
+  MenuRadio,
+} from "@/components/review/Menu";
 
 // Matches the "30-60 visible cards feel manageable" density guidance —
 // also caps how many masonry items mount at once, which is the actual
@@ -237,6 +245,8 @@ export function ArtLibraryClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxIndex, filtered]);
 
+  const mobileFilterCount = Number(showStarredOnly) + Number(includePublished) + activeLabels.size;
+
   const toggleLabel = (name: string) => {
     setActiveLabels((prev) => {
       const next = new Set(prev);
@@ -321,7 +331,7 @@ export function ArtLibraryClient({
                 href={includePublished ? "/art-library" : "/art-library?published=1"}
                 role="switch"
                 aria-checked={includePublished}
-                className="group flex items-center gap-2 normal-case tracking-normal text-text-muted hover:text-text"
+                className="group hidden sm:flex items-center gap-2 normal-case tracking-normal text-text-muted hover:text-text"
                 title="Also show work from submissions already accepted in Submittable"
               >
                 <span
@@ -340,14 +350,21 @@ export function ArtLibraryClient({
               </Link>
             </>
           }
-          aside={<DensityToggle density={density} setDensity={setDensity} prominent />}
+          aside={
+            <DensityToggle
+              density={density}
+              setDensity={setDensity}
+              prominent
+              className="hidden sm:flex"
+            />
+          }
         />
 
-        <div className="mt-3 space-y-2 sm:space-y-0 sm:mt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
-          {/* Label pills: horizontal scroll strip on mobile (was wrapping
-              into 3+ rows and eating the whole screen), wraps normally
-              from sm up. */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+        <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-2">
+          {/* Label pills on desktop. Phones get search + one Filters sheet
+              instead: a sideways-scrolling strip hid most of the labels
+              without any sign there were more. */}
+          <div className="hidden sm:flex flex-wrap gap-2">
             <button
               onClick={() => setShowStarredOnly(!showStarredOnly)}
               className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
@@ -380,13 +397,13 @@ export function ArtLibraryClient({
               wraps to its own line and, alone there, flex-1 stretches it
               to that line's full width — no separate breakpoint rule
               needed for the "dropped to its own row" case. */}
-          <div className="relative w-full sm:flex-1 sm:min-w-64">
+          <div className="relative flex-1 min-w-0 sm:min-w-64">
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-surface border border-border text-sm text-text px-3 py-1.5 pr-8 outline-none focus:border-accent transition-colors"
+              className="w-full bg-surface border border-border text-sm text-text px-3 py-2 sm:py-1.5 pr-8 outline-none focus:border-accent transition-colors"
             />
             {search && (
               <button
@@ -398,6 +415,66 @@ export function ArtLibraryClient({
                 ✕
               </button>
             )}
+          </div>
+
+          <div className="sm:hidden">
+            <Menu
+              align="right"
+              sheetTitle="Filters"
+              active={mobileFilterCount > 0}
+              buttonClassName={`flex items-center gap-2 text-sm px-3 py-2 border ${
+                mobileFilterCount > 0 ? "border-accent text-text" : "border-border text-text"
+              }`}
+              label={
+                <span>
+                  Filters
+                  {mobileFilterCount > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 bg-accent text-bg text-[10px] tabular-nums">
+                      {mobileFilterCount}
+                    </span>
+                  )}
+                </span>
+              }
+            >
+              <MenuHeading>Show</MenuHeading>
+              <MenuCheckbox
+                checked={showStarredOnly}
+                onToggle={() => setShowStarredOnly(!showStarredOnly)}
+              >
+                Only your stars
+              </MenuCheckbox>
+              <MenuLink
+                href={includePublished ? "/art-library" : "/art-library?published=1"}
+                selected={includePublished}
+                multi
+                keepOpen
+              >
+                Include published artists
+              </MenuLink>
+              <MenuDivider />
+              <MenuHeading>Labels</MenuHeading>
+              {KNOWN_LABELS.map((label) => (
+                <MenuCheckbox
+                  key={label}
+                  checked={activeLabels.has(label)}
+                  onToggle={() => toggleLabel(label)}
+                >
+                  {displayLabel(label)}
+                </MenuCheckbox>
+              ))}
+              <MenuDivider />
+              <MenuHeading>Artwork size</MenuHeading>
+              {(
+                [
+                  ["large", "One per row"],
+                  ["default", "Two per row"],
+                ] as const
+              ).map(([d, text]) => (
+                <MenuRadio key={d} checked={density === d} onSelect={() => setDensity(d)}>
+                  {text}
+                </MenuRadio>
+              ))}
+            </Menu>
           </div>
         </div>
 

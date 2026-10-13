@@ -23,7 +23,7 @@ import {
 } from "@/lib/reviewer/decisions";
 import { displayStatus } from "@/lib/submittable/statuses";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { DECISION_TONE, DecisionChip } from "@/components/review/DecisionChip";
+import { DECISION_TONE } from "@/components/review/DecisionChip";
 import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
 import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 import { SyncStatus } from "@/components/review/SyncStatus";
@@ -409,7 +409,7 @@ export function SubmissionReviewClient({
           ref={panelRef}
           className="lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border lg:overflow-y-auto lg:overscroll-contain shrink-0"
         >
-          <SubmissionHeader submission={submission} />
+          <SubmissionHeader submission={submission} reviewerId={reviewer.id} />
           <Statement text={submission.coverLetter} />
           <DecisionForm
             formRef={formRef}
@@ -422,7 +422,7 @@ export function SubmissionReviewClient({
             nextId={position.nextId}
             onNext={() => go(position.nextId)}
           />
-          <DecisionHistory submission={submission} reviewerId={reviewer.id} />
+          <TeamDecisions submission={submission} reviewerId={reviewer.id} />
           {/* Keyed on the server's label set: after a sync or another
               reviewer's change, local optimistic state starts fresh. */}
           <LabelPicker
@@ -547,52 +547,85 @@ function Section({
   );
 }
 
-function SubmissionHeader({ submission }: { submission: SubmissionDetail }) {
+/**
+ * Who and what, then the facts as a label/value list. Artist and title get
+ * the type hierarchy; everything administrative sits in one quiet grid so
+ * the title never competes with status lines.
+ */
+function SubmissionHeader({
+  submission,
+  reviewerId,
+}: {
+  submission: SubmissionDetail;
+  reviewerId: string;
+}) {
+  const me = submission.reviewers.some((r) => r.id === reviewerId);
+  const others = submission.reviewers.filter((r) => r.id !== reviewerId).map((r) => r.name);
+  const assigned = submission.reviewers.length
+    ? [me ? "You" : null, ...others].filter(Boolean).join(", ")
+    : "No one";
+  const row = (label: string, value: React.ReactNode) => (
+    <>
+      <dt className="text-text-muted">{label}</dt>
+      <dd className="min-w-0 text-text">{value}</dd>
+    </>
+  );
   return (
-    <div className="px-5 pt-5 pb-4 border-b border-border">
-      <h1 className="font-[family-name:var(--font-display)] text-2xl leading-tight">
-        {submission.artistName ?? "Unknown artist"}
-      </h1>
-      <p className="text-sm text-text-muted mt-1">{submission.submissionTitle || "Untitled"}</p>
-      <p className="mt-3 text-sm text-text-muted">
-        {displayStatus(submission.officialStatus)} ·{" "}
-        {submission.reviewers.length
-          ? `assigned to ${submission.reviewers.map((r) => r.name).join(" and ")}`
-          : "unassigned"}
-      </p>
-      <ul className="mt-2 space-y-0.5 text-sm">
-        {submission.files.map((f) => (
-          <li key={f.id} className="flex min-w-0 gap-1.5">
-            <a
-              href={f.originalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="truncate underline decoration-border hover:decoration-text"
-              title={`Open ${f.originalFilename ?? "file"}`}
-            >
-              {f.originalFilename ?? "File"}
-            </a>
-            <span className="text-text-muted whitespace-nowrap">
-              {f.pageCount} {f.pageCount === 1 ? "page" : "pages"}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {(submission.artistEmail || submission.artistWebsite) && (
-        <p className="mt-1 text-xs text-text-muted truncate">
-          {[submission.artistEmail, submission.artistWebsite].filter(Boolean).join(" · ")}
-        </p>
-      )}
-      {submission.submittableUrl && (
-        <a
-          href={submission.submittableUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-3 text-sm text-accent hover:underline"
-        >
-          Open in Submittable
-        </a>
-      )}
+    <div className="px-5 pt-5 pb-5 border-b border-border">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-[family-name:var(--font-display)] text-[1.75rem] leading-tight">
+            {submission.artistName ?? "Unknown artist"}
+          </h1>
+          {/* Titles of works in italics — the editorial convention, and what
+              separates the work from the person at a glance. */}
+          <p className="mt-1 font-[family-name:var(--font-display)] italic text-lg leading-snug text-text/85">
+            {submission.submissionTitle || "Untitled"}
+          </p>
+        </div>
+        {submission.submittableUrl && (
+          <a
+            href={submission.submittableUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 mt-1 flex items-center gap-1 border border-border px-2 py-1 text-xs text-text-muted hover:text-text hover:border-text-muted transition-colors"
+            title="Open this submission in Submittable"
+          >
+            Submittable <span aria-hidden>↗</span>
+          </a>
+        )}
+      </div>
+
+      <dl className="mt-4 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+        {row("Status", displayStatus(submission.officialStatus))}
+        {row("Assigned", assigned)}
+        {row(
+          submission.files.length === 1 ? "File" : "Files",
+          <ul className="space-y-0.5">
+            {submission.files.map((f) => (
+              <li key={f.id} className="flex min-w-0 gap-1.5">
+                <a
+                  href={f.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="truncate underline decoration-text-muted/40 underline-offset-2 hover:decoration-text"
+                  title={`Open ${f.originalFilename ?? "file"}`}
+                >
+                  {f.originalFilename ?? "File"}
+                </a>
+                <span className="text-text-muted whitespace-nowrap">{f.pageCount} pp.</span>
+              </li>
+            ))}
+          </ul>,
+        )}
+        {(submission.artistEmail || submission.artistWebsite) &&
+          row(
+            "Contact",
+            <span className="block truncate text-text-muted">
+              {[submission.artistEmail, submission.artistWebsite].filter(Boolean).join(" · ")}
+            </span>,
+          )}
+      </dl>
     </div>
   );
 }
@@ -620,6 +653,22 @@ function DecisionForm({
 }) {
   const [editingName, setEditingName] = useState(false);
   const { comment, setComment, name, setName, pending, result, showResult, submit } = draft;
+  // Already decided: show that decision, with the form one click away.
+  // Choosing 1–3 (or any decision) opens it too.
+  const [changing, setChanging] = useState(false);
+  const [seenMineId, setSeenMineId] = useState(mine?.id);
+  if (mine?.id !== seenMineId) {
+    // A new decision of yours just landed — fold the form back up.
+    setSeenMineId(mine?.id);
+    setChanging(false);
+  }
+  const formOpen = !mine || changing || decision !== null;
+  // Opening the folded form (Change, or pressing 1–3) lands in the comment.
+  const wasOpen = useRef(formOpen);
+  useEffect(() => {
+    if (formOpen && !wasOpen.current) focusComment();
+    wasOpen.current = formOpen;
+  }, [formOpen, focusComment]);
 
   const preview = useMemo(
     () =>
@@ -629,15 +678,54 @@ function DecisionForm({
     [decision, name, comment],
   );
 
+  const resultBox = showResult && result && (
+    <div role="status" className={`mt-3 text-sm ${result.ok ? "text-text" : "text-red-300"}`}>
+      {result.text}
+      {result.ok && nextId && (
+        <button type="button" onClick={onNext} className="ml-2 underline text-accent">
+          Next submission <span className="hidden lg:inline">(J)</span>
+        </button>
+      )}
+    </div>
+  );
+
+  if (mine && !formOpen) {
+    return (
+      <Section
+        sectionRef={formRef}
+        title="Your decision"
+        aside={
+          <button
+            type="button"
+            onClick={() => setChanging(true)}
+            className="text-xs border border-border px-2 py-1 text-text-muted hover:text-text hover:border-text-muted transition-colors"
+          >
+            Change
+          </button>
+        }
+      >
+        <DecisionRow d={mine} />
+        {resultBox}
+      </Section>
+    );
+  }
+
   return (
     <Section
       sectionRef={formRef}
       title={mine ? "Change your decision" : "Your decision"}
       aside={
         mine && (
-          <span className="text-xs text-text-muted">
-            You: {decisionLabel(mine.decision)}, {formatDate(mine.createdAt)}
-          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setChanging(false);
+              setDecision(null);
+            }}
+            className="text-xs text-text-muted underline hover:text-text"
+          >
+            Cancel
+          </button>
         )
       }
     >
@@ -714,7 +802,7 @@ function DecisionForm({
       {preview && (
         <div className="mt-3">
           <p className="text-xs text-text-muted mb-1">
-            Note that will be posted to Submittable, visible to the assigned team:
+            Note for Submittable · visible to the assigned team
           </p>
           <pre className="whitespace-pre-wrap font-[family-name:var(--font-ui)] text-sm bg-surface border border-border px-3 py-2 max-h-40 overflow-y-auto">
             {preview}
@@ -743,21 +831,62 @@ function DecisionForm({
         <span className="hidden lg:inline"> ⌘↵ to post.</span>
       </p>
 
-      {showResult && result && (
-        <div role="status" className={`mt-3 text-sm ${result.ok ? "text-text" : "text-red-300"}`}>
-          {result.text}
-          {result.ok && nextId && (
-            <button type="button" onClick={onNext} className="ml-2 underline text-accent">
-              Next submission <span className="hidden lg:inline">(J)</span>
-            </button>
-          )}
-        </div>
-      )}
+      {resultBox}
     </Section>
   );
 }
 
-function DecisionHistory({
+/**
+ * One reviewer's decision: who, what, when on one line; their comment set
+ * off beneath; and, if the note didn't reach Submittable, what to do.
+ */
+function DecisionRow({
+  d,
+  who,
+}: {
+  d: SubmissionDetail["decisions"][number];
+  /** Omitted under "Your decision", where it would only say "You". */
+  who?: string;
+}) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const status = effectivePushStatus(d);
+  return (
+    <div className="text-sm">
+      <div className="flex items-baseline gap-2 min-w-0">
+        {who && <span className="text-text truncate">{who}</span>}
+        <span
+          className={`font-medium whitespace-nowrap ${DECISION_TONE[d.decision]?.split(" ")[0] ?? ""}`}
+        >
+          {decisionLabel(d.decision)}
+        </span>
+        <span className="ml-auto text-xs text-text-muted whitespace-nowrap">
+          {formatDateTime(d.createdAt)}
+        </span>
+      </div>
+      {d.comment && (
+        <p className="mt-1.5 border-l-2 border-border pl-3 text-text/80 whitespace-pre-wrap leading-relaxed">
+          {d.comment}
+        </p>
+      )}
+      <DeliveryStatus
+        status={status}
+        error={d.pushError}
+        pending={pending}
+        onRetry={() =>
+          start(async () => {
+            const r = await retryDecision(d.id);
+            setError(r.ok ? null : r.error);
+          })
+        }
+      />
+      {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+    </div>
+  );
+}
+
+/** What the other assigned reviewers decided — or that they haven't yet. */
+function TeamDecisions({
   submission,
   reviewerId,
 }: {
@@ -765,57 +894,44 @@ function DecisionHistory({
   reviewerId: string;
 }) {
   const [showAll, setShowAll] = useState(false);
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  if (submission.decisions.length === 0) return null;
-  const latest = latestDecisionPerReviewer(submission.decisions);
-  const shown = showAll ? submission.decisions : latest;
+  const latest = latestDecisionPerReviewer(submission.decisions).filter(
+    (d) => d.reviewerId !== reviewerId,
+  );
+  const decidedIds = new Set(latest.map((d) => d.reviewerId));
+  const waiting = submission.reviewers.filter((r) => r.id !== reviewerId && !decidedIds.has(r.id));
+  const earlier =
+    submission.decisions.length - latestDecisionPerReviewer(submission.decisions).length;
+  if (latest.length === 0 && waiting.length === 0 && earlier === 0) return null;
 
   return (
     <Section
-      title="Decisions"
+      title="Other reviewers"
       aside={
-        submission.decisions.length > latest.length && (
+        earlier > 0 && (
           <button
             type="button"
             onClick={() => setShowAll((s) => !s)}
             className="text-xs text-text-muted underline hover:text-text"
           >
-            {showAll ? "Latest only" : `All ${submission.decisions.length}`}
+            {showAll ? "Latest only" : `Full history (${submission.decisions.length})`}
           </button>
         )
       }
     >
-      <ul className="space-y-3">
-        {shown.map((d) => (
-          <li key={d.id} className="text-sm">
-            <div className="flex items-center gap-2 flex-wrap">
-              <DecisionChip
-                reviewerName={d.reviewerName}
-                decision={d.decision}
-                pushStatus={effectivePushStatus(d)}
-              />
-              <span className="text-xs text-text-muted">{formatDateTime(d.createdAt)}</span>
-              {d.reviewerId === reviewerId && (
-                <span className="text-xs text-text-muted">(you)</span>
-              )}
-            </div>
-            {d.comment && <p className="mt-1 text-text-muted whitespace-pre-wrap">{d.comment}</p>}
-            <DeliveryStatus
-              status={effectivePushStatus(d)}
-              error={d.pushError}
-              pending={pending}
-              onRetry={() =>
-                start(async () => {
-                  const r = await retryDecision(d.id);
-                  setError(r.ok ? null : r.error);
-                })
-              }
-            />
+      <ul className="space-y-4">
+        {(showAll ? submission.decisions : latest).map((d) => (
+          <li key={d.id}>
+            <DecisionRow d={d} who={d.reviewerId === reviewerId ? "You" : d.reviewerName} />
           </li>
         ))}
+        {!showAll &&
+          waiting.map((r) => (
+            <li key={r.id} className="flex items-baseline gap-2 text-sm">
+              <span className="text-text">{r.name}</span>
+              <span className="text-text-muted">hasn&rsquo;t decided yet</span>
+            </li>
+          ))}
       </ul>
-      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
     </Section>
   );
 }
@@ -895,8 +1011,16 @@ function LabelPicker({
   );
 }
 
-function Statement({ text }: { text: string | null }) {
+function Statement({ text: raw }: { text: string | null }) {
   const [open, setOpen] = useState(false);
+  // Submitters paste with stray runs of blank lines; one paragraph break is enough.
+  const text = raw
+    ?.replace(/\r\n?/g, "\n")
+    .replace(/\n[ \t]*(\n[ \t]*)+/g, "\n\n")
+    // A lone line break before a lowercase word is a wrap from a PDF or
+    // form field, not a break the artist meant.
+    .replace(/([^\n])\n(?=[a-z])/g, "$1 ")
+    .trim();
   if (!text) return null;
   const long = text.length > 280;
   return (
@@ -909,7 +1033,7 @@ function Statement({ text }: { text: string | null }) {
             onClick={() => setOpen((o) => !o)}
             className="text-xs text-text-muted underline hover:text-text"
           >
-            {open ? "Show less" : "Show all"}
+            {open ? "Show less" : "Read all"}
           </button>
         )
       }
@@ -978,28 +1102,27 @@ function DeliveryStatus({
 }) {
   if (status === "pushed") return null;
   if (status === "pending")
-    return <p className="mt-1 text-xs text-text-muted">Posting to Submittable…</p>;
-  const button = (label: string) => (
-    <button type="button" disabled={pending} onClick={onRetry} className="ml-2 underline text-text">
-      {pending ? "Posting…" : label}
-    </button>
-  );
-  if (status === "failed") {
-    return (
-      <p className="mt-1 text-xs text-red-300">
-        Submittable refused this note{error ? ` (${error.replace(/\.$/, "")})` : ""}. Nothing was
-        posted.
-        {button("Retry")}
-      </p>
-    );
-  }
+    return <p className="mt-1.5 text-xs text-text-muted">Posting to Submittable…</p>;
+  const why = error ? ` (${error.replace(/\.$/, "")})` : "";
   return (
-    <p className="mt-1 text-xs text-red-300">
-      Couldn&rsquo;t confirm this note reached Submittable
-      {error ? ` (${error.replace(/\.$/, "")})` : ""}. Check the submission&rsquo;s notes in
-      Submittable first — if it isn&rsquo;t there,
-      {button("post it again")}
-    </p>
+    <div className="mt-2 border border-red-300/30 bg-red-300/5 px-3 py-2 text-xs text-red-200">
+      {status === "failed" ? (
+        <p>Submittable refused this note{why}. Nothing was posted.</p>
+      ) : (
+        <p>
+          Couldn&rsquo;t confirm this note reached Submittable{why}. Check the submission&rsquo;s
+          notes there first.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={onRetry}
+        className="mt-2 border border-red-300/40 px-2 py-1 text-text hover:border-red-300 disabled:opacity-50"
+      >
+        {pending ? "Posting…" : status === "failed" ? "Retry" : "It isn’t there — post again"}
+      </button>
+    </div>
   );
 }
 

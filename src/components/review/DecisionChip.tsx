@@ -19,11 +19,14 @@ export function initials(name: string): string {
 
 export function DecisionChip({
   reviewerName,
+  who,
   decision,
   pushStatus,
   compact = false,
 }: {
   reviewerName: string;
+  /** Short label for the reviewer ("You", a first name); defaults to initials when compact. */
+  who?: string;
   decision: string;
   pushStatus?: string;
   compact?: boolean;
@@ -36,7 +39,9 @@ export function DecisionChip({
       }`}
       title={`${reviewerName}: ${decisionLabel(decision)}${failed ? " — not confirmed in Submittable" : ""}`}
     >
-      <span className="text-text-muted">{compact ? initials(reviewerName) : reviewerName}</span>
+      <span className="text-text-muted">
+        {who ?? (compact ? initials(reviewerName) : reviewerName)}
+      </span>
       {decisionLabel(decision)}
       {failed && (
         <span className="text-red-300" aria-label="not posted">

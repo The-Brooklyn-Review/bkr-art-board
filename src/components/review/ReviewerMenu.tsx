@@ -12,6 +12,7 @@ export function ReviewerMenu({ name, onShortcuts }: { name: string; onShortcuts?
       align="right"
       panelClassName="w-56"
       ariaLabel={`${name} — account menu`}
+      sheetTitle={name}
       buttonClassName="flex items-center gap-2 pl-1 pr-2 py-1 border border-border text-text-muted hover:text-text hover:border-text-muted transition-colors text-xs"
       label={
         <>
@@ -25,13 +26,13 @@ export function ReviewerMenu({ name, onShortcuts }: { name: string; onShortcuts?
         </>
       }
     >
-      <p className="px-3 pt-2 pb-2 text-xs text-text-muted border-b border-border mb-1">
+      <p className="hidden sm:block px-3 pt-2 pb-2 text-xs text-text-muted border-b border-border mb-1">
         Reviewing as <span className="text-text">{name}</span>
       </p>
       <Link
         href="/reviewer?switch=1"
         role="menuitem"
-        className="flex w-full px-3 py-2 text-sm text-text-muted hover:bg-bg hover:text-text outline-none focus-visible:bg-bg"
+        className="flex w-full px-4 py-2.5 text-[15px] sm:px-3 sm:py-2 sm:text-sm text-text-muted hover:bg-bg-hover hover:text-text outline-none focus-visible:bg-bg-hover"
       >
         Switch reviewer
       </Link>
