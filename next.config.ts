@@ -8,6 +8,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // The share-link preview cards (/share/…/og) render with sharp. Its
+  // native libvips library is loaded at runtime, so Next's file tracing
+  // doesn't see it and Vercel's function bundle shipped without it ("cannot
+  // open shared object file: libvips-cpp.so"). Listed here explicitly.
+  // Only installed on Linux, so this matches nothing on a Mac build.
+  outputFileTracingIncludes: {
+    "/share/**": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+  },
   // Never indexed, archived or used for AI training — on every response,
   // not just HTML: the noindex <meta> (layout.tsx) can't cover images and
   // API responses, and robots.txt only asks crawlers not to fetch. Link
