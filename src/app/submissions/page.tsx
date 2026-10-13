@@ -226,14 +226,15 @@ function EmptyState({
       </div>
     );
   }
-  if (filters.mine === "todo" && filters.status === "undecided") {
+  // "Not decided yet" under Assigned: Me means *my* decision (decisionsOf).
+  if (filters.decision === "none" && filters.assigned === "me" && filters.status === "undecided") {
     return (
       <div className="mt-10 text-sm text-text-muted space-y-2">
         <p className="text-text">You&rsquo;ve made a decision on everything in this list.</p>
         <p>
           <Link
             className="underline hover:text-text"
-            href={`/submissions${filtersToQuery(filters, { mine: "done" })}`}
+            href={`/submissions${filtersToQuery(filters, { decision: "decided" })}`}
           >
             Review your decisions
           </Link>

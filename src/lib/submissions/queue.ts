@@ -1,6 +1,6 @@
 // Reviewer list data: one query for the filtered queue, shared by the list
 // page and the detail page's sidebar / next-previous.
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSignedR2Url } from "@/lib/storage/r2";
 import { signTiny } from "@/lib/storage/tiny";
@@ -17,10 +17,10 @@ export const FILTER_LABELS = [
 ];
 const SHOWN_LABEL_IDS = new Set(FILTER_LABELS.map((l) => l.submittableLabelId));
 
-export function queueWhere(
+export async function queueWhere(
   f: QueueFilters,
   reviewerId: string | null,
-): Prisma.SubmittableSubmissionWhereInput {
+): Promise<Prisma.SubmittableSubmissionWhereInput> {
   const and: Prisma.SubmittableSubmissionWhereInput[] = [];
   switch (f.status) {
     case "undecided":
@@ -53,11 +53,8 @@ export function queueWhere(
   for (const id of f.labels) {
     and.push({ labels: { some: { label: { submittableLabelId: id } } } });
   }
-  if (f.mine !== "any" && reviewerId) {
-    and.push({
-      decisions: f.mine === "done" ? { some: { reviewerId } } : { none: { reviewerId } },
-    });
-  }
+  const decision = await decisionWhere(f, reviewerId);
+  if (decision) and.push(decision);
   // Each word must appear in the artist or the title, so "anna cho" finds
   // "Anna  Cho" (Submittable names often carry double spaces) and word
   // order doesn't matter.
@@ -70,6 +67,44 @@ export function queueWhere(
     });
   }
   return { AND: and };
+}
+
+const NO_REVIEWER = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Whose decisions the Decision filter looks at follows the Assigned filter:
+ * Me → mine, a reviewer → theirs, Everyone / No one → anyone's (null).
+ * Pure — tested.
+ */
+export function decisionsOf(f: QueueFilters, reviewerId: string | null): string | null {
+  if (f.assigned === "me") return reviewerId ?? NO_REVIEWER;
+  if (f.assigned === "all" || f.assigned === "unassigned") return null;
+  return f.assigned;
+}
+
+async function decisionWhere(
+  f: QueueFilters,
+  reviewerId: string | null,
+): Promise<Prisma.SubmittableSubmissionWhereInput | null> {
+  if (f.decision === "any") return null;
+  const who = decisionsOf(f, reviewerId);
+  const byWho = who ? { reviewerId: who } : {};
+  if (f.decision === "none") return { decisions: { none: byWho } };
+  if (f.decision === "decided") return { decisions: { some: byWho } };
+  // A specific decision counts only if it's someone's LATEST one (a changed
+  // mind replaces the old decision), which a Prisma relation filter can't
+  // express — so find those submissions directly. Grouped per reviewer the
+  // same way latestDecisionPerReviewer does it.
+  const rows = await prisma.$queryRaw<{ submission_id: string }[]>`
+    select distinct submission_id from (
+      select distinct on (submission_id, coalesce(reviewer_id::text, 'name:' || lower(trim(reviewer_name))))
+        submission_id, reviewer_id, decision
+      from review_decisions
+      order by submission_id, coalesce(reviewer_id::text, 'name:' || lower(trim(reviewer_name))), created_at desc
+    ) latest
+    where decision = ${f.decision}
+      ${who ? Prisma.sql`and reviewer_id = ${who}::uuid` : Prisma.empty}`;
+  return { id: { in: rows.map((r) => r.submission_id) } };
 }
 
 /** The words of a search, whitespace collapsed. Pure — tested. */
@@ -99,7 +134,7 @@ export interface QueueRow {
 
 export async function getQueue(f: QueueFilters, reviewerId: string | null): Promise<QueueRow[]> {
   const rows = await prisma.submittableSubmission.findMany({
-    where: queueWhere(f, reviewerId),
+    where: await queueWhere(f, reviewerId),
     orderBy: [{ artistName: "asc" }, { id: "asc" }],
     select: {
       id: true,
@@ -176,7 +211,7 @@ export async function getQueue(f: QueueFilters, reviewerId: string | null): Prom
  */
 export async function getQueueNav(f: QueueFilters, reviewerId: string) {
   const rows = await prisma.submittableSubmission.findMany({
-    where: queueWhere(f, reviewerId),
+    where: await queueWhere(f, reviewerId),
     orderBy: [{ artistName: "asc" }, { id: "asc" }],
     select: {
       id: true,
@@ -204,7 +239,7 @@ export async function countByStatus(
 ): Promise<Record<StatusGroup, number>> {
   const groups = await prisma.submittableSubmission.groupBy({
     by: ["officialStatus"],
-    where: queueWhere({ ...f, status: "all" }, reviewerId),
+    where: await queueWhere({ ...f, status: "all" }, reviewerId),
     _count: { _all: true },
   });
   return bucketStatusCounts(groups.map((g) => [g.officialStatus, g._count._all]));
@@ -243,7 +278,7 @@ export async function getReviewers() {
 
 /**
  * Next/previous for a submission that isn't (or is no longer) in the
- * filtered list — e.g. you just decided it under "Not yet decided by me",
+ * filtered list — e.g. you just decided it under "Decision: Not decided yet",
  * or opened it from the gallery. Uses the list's own sort key (artist
  * name, then id) so J continues from where you were, not from the top.
  */
@@ -253,7 +288,7 @@ export async function neighborsOutside(
   current: { id: string; artistName: string | null },
 ): Promise<{ prevId: string | null; nextId: string | null }> {
   if (current.artistName === null) return { prevId: null, nextId: null };
-  const base = queueWhere(f, reviewerId);
+  const base = await queueWhere(f, reviewerId);
   const name = current.artistName;
   const [next, prev] = await Promise.all([
     prisma.submittableSubmission.findFirst({

@@ -13,14 +13,18 @@ describe("reviewer list filters", () => {
       status: "completed",
       assigned: uuid,
       labels: `${uuid},${uuid}`,
-      mine: "todo",
+      decision: "tiered_reject",
       q: "collage",
     });
     expect(parseFilters(Object.fromEntries(new URLSearchParams(filtersToQuery(f))))).toEqual(f);
   });
+  it("still reads the old 'decided by me' links", () => {
+    expect(parseFilters({ mine: "todo" }).decision).toBe("none");
+    expect(parseFilters({ mine: "done" }).decision).toBe("decided");
+  });
   it("ignores junk values instead of failing", () => {
     expect(
-      parseFilters({ status: "bogus", assigned: "'; drop", labels: "nope", mine: "x" }),
+      parseFilters({ status: "bogus", assigned: "'; drop", labels: "nope", decision: "x" }),
     ).toEqual(DEFAULT_FILTERS);
   });
 });

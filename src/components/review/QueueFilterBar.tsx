@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { STATUS_GROUPS, type StatusGroup } from "@/lib/submittable/statuses";
 import {
+  DECISION_FILTERS,
   filtersToQuery,
   isDefaultFilters,
   DEFAULT_FILTERS,
@@ -12,12 +13,6 @@ import {
 } from "@/lib/submissions/filters";
 import { Menu, MenuCheckbox, MenuDivider, MenuHeading, MenuLink } from "@/components/review/Menu";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
-
-const MINE_OPTIONS = [
-  ["any", "Any", "Any"],
-  ["todo", "Not decided by me yet", "Not yet"],
-  ["done", "Decided by me", "Decided"],
-] as const;
 
 /**
  * Two tiers in one row (wrapping on narrow screens):
@@ -96,7 +91,14 @@ export function QueueFilterBar({
         : assigned === "unassigned"
           ? "No one"
           : (others.find((r) => r.id === assigned)?.name ?? "Reviewer");
-  const mineLabel = MINE_OPTIONS.find(([v]) => v === filters.mine)![2];
+  const decisionLabel = DECISION_FILTERS.find(([v]) => v === filters.decision)![1];
+  // Whose decisions the filter reads follows Assigned (see decisionsOf).
+  const whoseDecision =
+    assigned === "me"
+      ? "Your decision"
+      : assigned === "all" || assigned === "unassigned"
+        ? "Anyone’s decision"
+        : `${assignedLabel}’s decision`;
   const labelName = (id: string) => labels.find((l) => l.submittableLabelId === id)?.name ?? "?";
 
   // In the phone's combined sheet, picking one option shouldn't close it.
@@ -127,9 +129,14 @@ export function QueueFilterBar({
       </MenuLink>
     </>
   );
-  const mineItems = (keepOpen: boolean) =>
-    MINE_OPTIONS.map(([v, label]) => (
-      <MenuLink key={v} href={href({ mine: v })} selected={filters.mine === v} keepOpen={keepOpen}>
+  const decisionItems = (keepOpen: boolean) =>
+    DECISION_FILTERS.map(([v, label]) => (
+      <MenuLink
+        key={v}
+        href={href({ decision: v })}
+        selected={filters.decision === v}
+        keepOpen={keepOpen}
+      >
         {label}
       </MenuLink>
     ));
@@ -150,7 +157,7 @@ export function QueueFilterBar({
     );
   const secondaryCount =
     Number(assigned !== DEFAULT_FILTERS.assigned) +
-    Number(filters.mine !== DEFAULT_FILTERS.mine) +
+    Number(filters.decision !== DEFAULT_FILTERS.decision) +
     selectedLabels.length;
   const currentStatus = STATUS_GROUPS.find((g) => g.value === filters.status)!;
   const resetHref = `/submissions${filtersToQuery(DEFAULT_FILTERS)}`;
@@ -212,8 +219,8 @@ export function QueueFilterBar({
             <MenuHeading>Assigned to</MenuHeading>
             {assignedItems(true)}
             <MenuDivider />
-            <MenuHeading>My decision</MenuHeading>
-            {mineItems(true)}
+            <MenuHeading>{whoseDecision}</MenuHeading>
+            {decisionItems(true)}
             <MenuDivider />
             <MenuHeading>Labels</MenuHeading>
             {labelItems}
@@ -271,16 +278,17 @@ export function QueueFilterBar({
         </Menu>
 
         <Menu
-          sheetTitle="My decision"
-          active={filters.mine !== DEFAULT_FILTERS.mine}
+          sheetTitle={whoseDecision}
+          active={filters.decision !== DEFAULT_FILTERS.decision}
           label={
             <span>
-              <span className="text-text-muted">My decision:</span>{" "}
-              <span className="text-text">{mineLabel}</span>
+              <span className="text-text-muted">Decision:</span>{" "}
+              <span className="text-text">{decisionLabel}</span>
             </span>
           }
         >
-          {mineItems(false)}
+          <MenuHeading>{whoseDecision}</MenuHeading>
+          {decisionItems(false)}
         </Menu>
 
         <Menu

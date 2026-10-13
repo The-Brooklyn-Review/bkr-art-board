@@ -4,14 +4,28 @@
 import { STATUS_GROUPS, type StatusGroup } from "@/lib/submittable/statuses";
 
 export type AssignedFilter = "me" | "unassigned" | "all" | string; // or a Reviewer id
-export type MineFilter = "todo" | "done" | "any";
+
+/**
+ * Our own decisions (not Submittable's status). Whose decisions count
+ * follows the Assigned filter: Me → mine, a reviewer → theirs, Everyone /
+ * No one → anyone's. A reviewer's latest decision is the one that counts.
+ */
+export const DECISION_FILTERS = [
+  ["any", "Any"],
+  ["none", "Not decided yet"],
+  ["decided", "Decided"],
+  ["accept", "Accept"],
+  ["tiered_reject", "Tiered Reject"],
+  ["reject", "Reject"],
+] as const;
+export type DecisionFilter = (typeof DECISION_FILTERS)[number][0];
 
 export interface QueueFilters {
   status: StatusGroup;
   assigned: AssignedFilter;
   /** Submittable label IDs; a submission must have all of them. */
   labels: string[];
-  mine: MineFilter;
+  decision: DecisionFilter;
   q: string;
 }
 
@@ -19,7 +33,7 @@ export const DEFAULT_FILTERS: QueueFilters = {
   status: "undecided",
   assigned: "me",
   labels: [],
-  mine: "any",
+  decision: "any",
   q: "",
 };
 
@@ -29,7 +43,8 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 export function parseFilters(params: Params): QueueFilters {
   const status = first(params.status);
   const assigned = first(params.assigned);
-  const mine = first(params.mine);
+  // `mine` is the old name: todo/done links from before still work.
+  const decision = first(params.decision) || { todo: "none", done: "decided" }[first(params.mine)];
   const labels = first(params.labels);
   return {
     status: STATUS_GROUPS.some((g) => g.value === status)
@@ -43,7 +58,7 @@ export function parseFilters(params: Params): QueueFilters {
         ? assigned
         : DEFAULT_FILTERS.assigned,
     labels: labels ? labels.split(",").filter((l) => /^[0-9a-f-]{36}$/i.test(l)) : [],
-    mine: mine === "todo" || mine === "done" ? mine : "any",
+    decision: DECISION_FILTERS.some(([v]) => v === decision) ? (decision as DecisionFilter) : "any",
     q: first(params.q).slice(0, 100),
   };
 }
@@ -55,7 +70,7 @@ export function filtersToQuery(f: QueueFilters, overrides: Partial<QueueFilters>
   if (merged.status !== DEFAULT_FILTERS.status) p.set("status", merged.status);
   if (merged.assigned !== DEFAULT_FILTERS.assigned) p.set("assigned", merged.assigned);
   if (merged.labels.length) p.set("labels", merged.labels.join(","));
-  if (merged.mine !== DEFAULT_FILTERS.mine) p.set("mine", merged.mine);
+  if (merged.decision !== DEFAULT_FILTERS.decision) p.set("decision", merged.decision);
   if (merged.q) p.set("q", merged.q);
   const s = p.toString();
   return s ? `?${s}` : "";

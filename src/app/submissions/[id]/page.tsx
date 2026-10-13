@@ -46,7 +46,7 @@ export default async function SubmissionReviewPage({
   const { prevId, nextId } =
     index >= 0
       ? { prevId: queue[index - 1]?.id ?? null, nextId: queue[index + 1]?.id ?? null }
-      : // Not in the list (just decided under "Not yet decided by me", or
+      : // Not in the list (just decided under "Decision: Not decided yet", or
         // opened from the gallery): continue from its place in the order.
         await neighborsOutside(filters, reviewer.id, submission);
 
