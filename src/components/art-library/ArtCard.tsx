@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
-import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
+import { BADGE_LABELS, KNOWN_LABELS, badgesOf, displayLabel } from "@/lib/art-library/labels";
 
 const USED_STATE_LABELS: Record<string, string> = {
   available: "Available",
@@ -22,8 +22,9 @@ export function ArtCard({
    * pass-through while scrolling shouldn't trigger a prefetch. */
   onHoverIntent?: () => void;
 }) {
+  const badges = badgesOf(asset.labels);
   const knownLabels = asset.labels
-    .filter((l) => KNOWN_LABELS.includes(l.name))
+    .filter((l) => KNOWN_LABELS.includes(l.name) && !(l.name in BADGE_LABELS))
     .sort((a, b) => KNOWN_LABELS.indexOf(a.name) - KNOWN_LABELS.indexOf(b.name));
 
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -46,7 +47,19 @@ export function ArtCard({
       onMouseLeave={() => clearTimeout(hoverTimeout.current)}
       className="group mb-4 block w-full text-left break-inside-avoid cursor-zoom-in"
     >
-      <div className="overflow-hidden bg-surface border border-border">
+      <div className="relative overflow-hidden bg-surface border border-border">
+        {badges.length > 0 && (
+          <span className="absolute top-2 left-2 z-10 flex gap-1">
+            {badges.map((b) => (
+              <span
+                key={b}
+                className="bg-bg/85 border border-accent/70 text-accent text-[10px] uppercase tracking-wide px-1.5 py-0.5"
+              >
+                {b}
+              </span>
+            ))}
+          </span>
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={asset.thumbnailUrl}

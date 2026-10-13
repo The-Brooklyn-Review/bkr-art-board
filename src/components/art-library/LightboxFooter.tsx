@@ -6,7 +6,7 @@ import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
 import { createShareLink, createSubmissionShareLink } from "@/lib/actions/sharePreview";
 import { useCopyLink } from "@/lib/ui/useCopyLink";
-import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
+import { BADGE_LABELS, KNOWN_LABELS, badgesOf, displayLabel } from "@/lib/art-library/labels";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 import { ActionLinks } from "./ActionLinks";
 import { ConfirmModal } from "./ConfirmModal";
@@ -55,7 +55,10 @@ export function LightboxFooter({
       // The artwork on screen leads the link (its preview image).
       async () => `/share/s/${await createSubmissionShareLink(asset.submissionId, asset.id)}`,
     );
-  const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
+  const badges = badgesOf(asset.labels);
+  const knownLabels = asset.labels.filter(
+    (l) => KNOWN_LABELS.includes(l.name) && !(l.name in BADGE_LABELS),
+  );
 
   // Re-reads from localStorage whenever the lightbox navigates to a
   // different asset (sibling nav, next/prev) — isStarred is per-asset, so
@@ -185,6 +188,14 @@ export function LightboxFooter({
                     {asset.period.label}
                   </span>
                 )}
+                {badges.map((b) => (
+                  <span
+                    key={b}
+                    className="font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-accent border border-accent/70 px-1.5 py-px"
+                  >
+                    {b}
+                  </span>
+                ))}
               </p>
               {/* One line, full title on hover: a wrapped title pushed the
                   action row out of the reserved band (globals.css). */}

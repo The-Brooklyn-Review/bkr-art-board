@@ -95,3 +95,15 @@ describe("createGallerySearch", () => {
     expect(search(" a ")).toBeNull();
   });
 });
+
+describe("badge labels", () => {
+  it("picks out the poetry/fiction labels, in a fixed order", async () => {
+    const { badgesOf, displayLabel } = await import("./labels");
+    expect(
+      badgesOf([{ name: "use for fiction" }, { name: "collage" }, { name: "use for poetry" }]),
+    ).toEqual(["For poetry", "For fiction"]);
+    expect(badgesOf([{ name: "collage" }])).toEqual([]);
+    expect(displayLabel("use for poetry")).toBe("Use for Poetry");
+    expect(displayLabel("painting/drawing")).toBe("Painting/Drawing");
+  });
+});

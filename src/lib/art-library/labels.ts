@@ -14,9 +14,34 @@ export const KNOWN_LABELS = [
   "sculpture/textile/object",
   "a grade",
   "b grade",
+  "use for poetry",
+  "use for fiction",
 ];
 
-/** "painting/drawing" → "Painting/Drawing", "b grade" → "B Grade". */
+/** "painting/drawing" → "Painting/Drawing", "b grade" → "B Grade",
+ * "use for poetry" → "Use for Poetry". */
 export function displayLabel(name: string): string {
+  if (name.startsWith("use for ")) return `Use for ${capitalize(name.slice(8))}`;
   return name.replace(/(^|[\s/])(\S)/g, (_, sep: string, c: string) => sep + c.toUpperCase());
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Labels the poetry and fiction editors use to flag work they'd like —
+ * shown as a badge on the artwork, not in the plain label line, so they
+ * stand out to anyone browsing the gallery.
+ */
+export const BADGE_LABELS: Record<string, string> = {
+  "use for poetry": "For poetry",
+  "use for fiction": "For fiction",
+};
+
+/** An asset's badge labels, in a fixed order. */
+export function badgesOf(labels: { name: string }[]): string[] {
+  return Object.keys(BADGE_LABELS)
+    .filter((key) => labels.some((l) => l.name === key))
+    .map((key) => BADGE_LABELS[key]);
 }

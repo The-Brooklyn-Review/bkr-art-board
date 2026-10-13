@@ -25,6 +25,10 @@ export const REVIEWER_LABELS: readonly ReviewerLabel[] = [
   { submittableLabelId: "14ea1727-63f2-477b-858f-99cafbc5a4e7", name: "Sculpture/Textile/Object" },
   { submittableLabelId: "1c168259-cd77-4b47-b07f-47132cfd0e8b", name: "A Grade" },
   { submittableLabelId: "c59c8c7f-8b5e-478a-9230-77a6e4f24b50", name: "B Grade" },
+  // For the poetry and fiction editors: a soft "we'd like this one" on a
+  // submission (2026-10-13). IDs read from the live account.
+  { submittableLabelId: "d90674f3-8f06-4f0c-9f1a-6662979741e0", name: "Use for Poetry" },
+  { submittableLabelId: "e46dab71-a001-4b33-bd57-a9d63f233eb2", name: "Use for Fiction" },
 ];
 
 const BY_ID = new Map(REVIEWER_LABELS.map((l) => [l.submittableLabelId, l]));
