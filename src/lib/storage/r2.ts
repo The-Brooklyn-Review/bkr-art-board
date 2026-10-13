@@ -1,6 +1,11 @@
 // No `server-only` guard: shared with standalone scripts run via tsx,
 // where that package unconditionally throws (see src/lib/db/index.ts).
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectsCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Singleton — the art library page signs 200+ URLs per request; a fresh
@@ -63,4 +68,29 @@ export async function fetchR2Object(key: string): Promise<{ body: Buffer; conten
   const result = await client().send(new GetObjectCommand({ Bucket: BUCKET(), Key: key }));
   const bytes = await result.Body!.transformToByteArray();
   return { body: Buffer.from(bytes), contentType: result.ContentType };
+}
+
+/**
+ * Permanently deletes objects — used only when a submission is withdrawn
+ * (docs/SPEC-review-and-sync.md §5). Batched at S3's 1,000-key limit.
+ * Throws if any key fails, so callers can leave the DB rows in place and
+ * retry on the next sync rather than orphaning a half-deleted submission.
+ */
+export async function deleteFromR2(keys: string[]): Promise<void> {
+  const unique = [...new Set(keys.filter(Boolean))];
+  for (let i = 0; i < unique.length; i += 1000) {
+    const batch = unique.slice(i, i + 1000);
+    const result = await client().send(
+      new DeleteObjectsCommand({
+        Bucket: BUCKET(),
+        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+      }),
+    );
+    if (result.Errors && result.Errors.length > 0) {
+      const first = result.Errors[0];
+      throw new Error(
+        `R2 delete failed for ${result.Errors.length} object(s), e.g. ${first.Key}: ${first.Message}`,
+      );
+    }
+  }
 }

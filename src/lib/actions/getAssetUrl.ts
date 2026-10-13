@@ -1,5 +1,7 @@
 "use server";
 
+import { requireAuth } from "@/lib/requireAuth";
+
 import { prisma } from "@/lib/db";
 import { getSignedR2Url } from "@/lib/storage/r2";
 
@@ -12,6 +14,7 @@ import { getSignedR2Url } from "@/lib/storage/r2";
  * meantime.
  */
 export async function getAssetLargeUrl(assetId: string): Promise<string> {
+  await requireAuth();
   const asset = await prisma.artAsset.findUniqueOrThrow({
     where: { id: assetId },
     select: { storagePathLarge: true },

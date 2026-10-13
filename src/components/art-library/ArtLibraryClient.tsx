@@ -10,6 +10,17 @@ import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
 import { ZoomableLightbox } from "./ZoomableLightbox";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
+import Link from "next/link";
+import { AppNav } from "@/components/review/AppNav";
+import { AppHeader, PageTitle } from "@/components/review/AppHeader";
+import {
+  Menu,
+  MenuCheckbox,
+  MenuDivider,
+  MenuHeading,
+  MenuLink,
+  MenuRadio,
+} from "@/components/review/Menu";
 
 // Matches the "30-60 visible cards feel manageable" density guidance —
 // also caps how many masonry items mount at once, which is the actual
@@ -62,10 +73,17 @@ export function ArtLibraryClient({
   assets: initialAssets,
   submissionCount,
   initialAssetId,
+  includePublished,
+  reviewerName,
+  sync,
 }: {
   assets: LibraryAsset[];
   submissionCount: number;
   initialAssetId: string | null;
+  /** Also showing work from already-accepted submissions (?published=1). */
+  includePublished: boolean;
+  reviewerName: string | null;
+  sync: { lastSynced: string; stale: boolean };
 }) {
   // Local, mutable copy of the server-fetched list. Publishing or hiding an
   // asset updates this in place (see removeAsset below) instead of
@@ -73,9 +91,20 @@ export function ArtLibraryClient({
   // signed R2 URLs) and doing so from inside the lightbox's own mutation
   // would fight with the client-side transition to the next asset.
   const [assets, setAssets] = useState(initialAssets);
+  // A new server list (e.g. "Include published artists" toggled) replaces
+  // the local copy. Without this the grid and the artwork count kept the
+  // first list while only the submission count (a prop) changed.
+  const [shownList, setShownList] = useState(initialAssets);
+  if (initialAssets !== shownList) {
+    setShownList(initialAssets);
+    setAssets(initialAssets);
+  }
   const [search, setSearch] = useState("");
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
+  // Reading period ("Winter ’25", "Fall ’26"): the coarsest cut — which
+  // cycle's work you're choosing from — so it sits above the label chips.
+  const [period, setPeriod] = useState<string>("all");
   const [density, setDensity] = useState<"compact" | "default" | "large">("default");
   // Tracked by asset ID rather than index into `filtered` — an index would
   // go stale the instant `removeAsset` (or a search/filter change) shifts
@@ -95,22 +124,6 @@ export function ArtLibraryClient({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate one-time mount read, see comment above
     if (window.innerWidth < 640) setDensity("large");
-  }, []);
-
-  // Hide the header on scroll-down, reveal it on scroll-up — same pattern
-  // as most mobile content apps. Without this, the header either eats
-  // permanent screen space (sticky) or filters/search become unreachable
-  // without scrolling all the way back to the top (non-sticky).
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const lastScrollY = useRef(0);
-  useEffect(() => {
-    function onScroll() {
-      const y = window.scrollY;
-      setHeaderHidden(y > lastScrollY.current && y > 250);
-      lastScrollY.current = y;
-    }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const fuse = useMemo(() => {
@@ -133,6 +146,24 @@ export function ArtLibraryClient({
     });
   }, [assets]);
 
+  // Periods present, oldest first, with how many submissions each has.
+  const periods = useMemo(() => {
+    const byId = new Map<
+      string,
+      { id: string; label: string; sortKey: number; subs: Set<string> }
+    >();
+    for (const a of assets) {
+      if (!a.period) continue;
+      const p = byId.get(a.period.id) ?? { ...a.period, subs: new Set<string>() };
+      p.subs.add(a.submissionId);
+      byId.set(a.period.id, p);
+    }
+    return [...byId.values()].sort((x, y) => x.sortKey - y.sortKey);
+  }, [assets]);
+  // A period that no longer exists (e.g. after toggling published off)
+  // falls back to all.
+  const activePeriod = periods.some((p) => p.id === period) ? period : "all";
+
   const filtered = useMemo(() => {
     let results = assets;
 
@@ -143,7 +174,8 @@ export function ArtLibraryClient({
     }
 
     // Then apply other filters
-    return results.filter((a) => {
+    const kept = results.filter((a) => {
+      if (activePeriod !== "all" && a.period?.id !== activePeriod) return false;
       // Check starred filter if enabled
       if (showStarredOnly) {
         const isStarred =
@@ -158,14 +190,18 @@ export function ArtLibraryClient({
       }
       return true;
     });
-  }, [assets, search, activeLabels, showStarredOnly, fuse]);
+    // Oldest reading period first (it's the one to publish from first);
+    // a search keeps its relevance order instead.
+    if (search.trim()) return kept;
+    return [...kept].sort((x, y) => (x.period?.sortKey ?? 0) - (y.period?.sortKey ?? 0));
+  }, [assets, search, activeLabels, showStarredOnly, fuse, activePeriod]);
 
   // A fresh filter/search should show the first batch again, not whatever
   // scroll position happened to reveal under the old result set.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting pagination on filter change, not worth the in-render-adjustment rewrite at this list size
     setVisibleCount(GRID_BATCH_SIZE);
-  }, [search, activeLabels, showStarredOnly]);
+  }, [search, activeLabels, showStarredOnly, activePeriod]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -243,6 +279,8 @@ export function ArtLibraryClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxIndex, filtered]);
 
+  const mobileFilterCount = Number(showStarredOnly) + Number(includePublished) + activeLabels.size;
+
   const toggleLabel = (name: string) => {
     setActiveLabels((prev) => {
       const next = new Set(prev);
@@ -312,39 +350,93 @@ export function ArtLibraryClient({
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      {/*
-        Sticky at every breakpoint, but on mobile it also slides off-screen
-        on scroll-down and back on scroll-up (headerHidden) — filters/search
-        stay reachable without permanently eating screen space. sm:translate-y-0
-        below always wins at sm+, so desktop never hides.
-      */}
-      <header
-        className={`border-b border-border px-4 py-3 sm:px-6 sm:py-5 sticky top-0 bg-bg/95 backdrop-blur-sm z-10 transition-transform duration-200 sm:translate-y-0 ${
-          headerHidden ? "-translate-y-full" : "translate-y-0"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          {/* Title + count sit on one baseline-aligned line, wrapping to
-              their own stacked lines only if they don't fit (narrow
-              phones) — flex-wrap handles that without a breakpoint split. */}
-          <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
-            <h1 className="font-[family-name:var(--font-display)] text-xl sm:text-2xl text-text">
-              Visual Arts Library
-            </h1>
-            <p className="text-xs text-text-muted uppercase tracking-wide">
-              {submissionCount} submissions · {assets.length} artworks
-            </p>
-          </div>
-          {/* Always opposite the title, at every breakpoint — matches
-              where this control already sat on mobile. */}
-          <DensityToggle density={density} setDensity={setDensity} prominent />
-        </div>
+      <AppHeader nav={<AppNav current="gallery" reviewerName={reviewerName} sync={sync} />}>
+        <PageTitle
+          // The tab names the place (Gallery); the heading says what's in it,
+          // the way Review's heading says "Assigned to you".
+          title={includePublished ? "Under consideration & published" : "Under consideration"}
+          meta={
+            <>
+              <p>
+                {submissionCount} submissions · {assets.length} artworks
+              </p>
+              {/* Scope, not a filter: it widens what's loaded (a different
+                  server query), so it sits with the counts it changes
+                  rather than among the chips that narrow them. */}
+              <Link
+                href={includePublished ? "/art-library" : "/art-library?published=1"}
+                role="switch"
+                aria-checked={includePublished}
+                // items-baseline + a self-centred switch: the link's baseline
+                // comes from its text, so it lines up with the counts beside it.
+                className="group hidden sm:inline-flex items-baseline gap-2 normal-case tracking-normal text-text-muted hover:text-text"
+                title="Also show work from submissions already accepted in Submittable"
+              >
+                <span
+                  aria-hidden
+                  className={`relative self-center w-6 h-3.5 rounded-full border transition-colors ${
+                    includePublished ? "bg-accent border-accent" : "border-text-muted/60"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-2 h-2 rounded-full transition-all ${
+                      includePublished ? "left-3 bg-bg" : "left-0.5 bg-text-muted"
+                    }`}
+                  />
+                </span>
+                Include published artists
+              </Link>
+            </>
+          }
+          aside={
+            <DensityToggle
+              density={density}
+              setDensity={setDensity}
+              prominent
+              className="hidden sm:flex"
+            />
+          }
+        />
 
-        <div className="mt-3 space-y-2 sm:space-y-0 sm:mt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
-          {/* Label pills: horizontal scroll strip on mobile (was wrapping
-              into 3+ rows and eating the whole screen), wraps normally
-              from sm up. */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+        <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-2">
+          {/* Label pills on desktop. Phones get search + one Filters sheet
+              instead: a sideways-scrolling strip hid most of the labels
+              without any sign there were more. */}
+          {periods.length > 1 && (
+            <>
+              <div
+                className="hidden sm:flex border border-border"
+                role="group"
+                aria-label="Reading period"
+              >
+                {[{ id: "all", label: "All", subs: null as Set<string> | null }, ...periods].map(
+                  (p) => {
+                    const on = activePeriod === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPeriod(p.id)}
+                        aria-pressed={on}
+                        className={`text-xs px-3 py-1.5 border-r border-border last:border-r-0 whitespace-nowrap transition-colors ${
+                          on
+                            ? "bg-surface text-text shadow-[inset_0_-2px_0_var(--color-accent)]"
+                            : "text-text-muted hover:text-text hover:bg-bg-hover"
+                        }`}
+                      >
+                        {p.label}
+                        {p.subs && (
+                          <span className="ml-1.5 tabular-nums text-text-muted">{p.subs.size}</span>
+                        )}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+              <span aria-hidden className="hidden sm:block w-px h-5 bg-border mx-1" />
+            </>
+          )}
+          <div className="hidden sm:flex flex-wrap gap-2">
             <button
               onClick={() => setShowStarredOnly(!showStarredOnly)}
               className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
@@ -356,6 +448,7 @@ export function ArtLibraryClient({
             >
               ⭐ Your stars
             </button>
+            <span aria-hidden className="shrink-0 w-px self-stretch bg-border mx-1" />
             {KNOWN_LABELS.map((label) => (
               <button
                 key={label}
@@ -376,13 +469,13 @@ export function ArtLibraryClient({
               wraps to its own line and, alone there, flex-1 stretches it
               to that line's full width — no separate breakpoint rule
               needed for the "dropped to its own row" case. */}
-          <div className="relative w-full sm:flex-1 sm:min-w-64">
+          <div className="relative flex-1 min-w-0 sm:min-w-64">
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-surface border border-border text-sm text-text px-3 py-1.5 pr-8 outline-none focus:border-accent transition-colors"
+              className="w-full bg-surface border border-border text-sm text-text px-3 py-2 sm:py-1.5 pr-8 outline-none focus:border-accent transition-colors"
             />
             {search && (
               <button
@@ -395,6 +488,87 @@ export function ArtLibraryClient({
               </button>
             )}
           </div>
+
+          <div className="sm:hidden">
+            <Menu
+              align="right"
+              sheetTitle="Filters"
+              active={mobileFilterCount > 0}
+              buttonClassName={`flex items-center gap-2 text-sm px-3 py-2 border ${
+                mobileFilterCount > 0 ? "border-accent text-text" : "border-border text-text"
+              }`}
+              label={
+                <span>
+                  Filters
+                  {mobileFilterCount > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 bg-accent text-bg text-[10px] tabular-nums">
+                      {mobileFilterCount}
+                    </span>
+                  )}
+                </span>
+              }
+            >
+              {periods.length > 1 && (
+                <>
+                  <MenuHeading>Reading period</MenuHeading>
+                  <MenuRadio checked={activePeriod === "all"} onSelect={() => setPeriod("all")}>
+                    All periods
+                  </MenuRadio>
+                  {periods.map((p) => (
+                    <MenuRadio
+                      key={p.id}
+                      checked={activePeriod === p.id}
+                      onSelect={() => setPeriod(p.id)}
+                    >
+                      <span className="flex justify-between gap-3">
+                        {p.label}
+                        <span className="text-text-muted tabular-nums">{p.subs.size}</span>
+                      </span>
+                    </MenuRadio>
+                  ))}
+                  <MenuDivider />
+                </>
+              )}
+              <MenuHeading>Show</MenuHeading>
+              <MenuCheckbox
+                checked={showStarredOnly}
+                onToggle={() => setShowStarredOnly(!showStarredOnly)}
+              >
+                Only your stars
+              </MenuCheckbox>
+              <MenuLink
+                href={includePublished ? "/art-library" : "/art-library?published=1"}
+                selected={includePublished}
+                multi
+                keepOpen
+              >
+                Include published artists
+              </MenuLink>
+              <MenuDivider />
+              <MenuHeading>Labels</MenuHeading>
+              {KNOWN_LABELS.map((label) => (
+                <MenuCheckbox
+                  key={label}
+                  checked={activeLabels.has(label)}
+                  onToggle={() => toggleLabel(label)}
+                >
+                  {displayLabel(label)}
+                </MenuCheckbox>
+              ))}
+              <MenuDivider />
+              <MenuHeading>Artwork size</MenuHeading>
+              {(
+                [
+                  ["large", "One per row"],
+                  ["default", "Two per row"],
+                ] as const
+              ).map(([d, text]) => (
+                <MenuRadio key={d} checked={density === d} onSelect={() => setDensity(d)}>
+                  {text}
+                </MenuRadio>
+              ))}
+            </Menu>
+          </div>
         </div>
 
         {filtered.length !== assets.length && (
@@ -402,9 +576,9 @@ export function ArtLibraryClient({
             Showing {filtered.length} of {assets.length} artworks
           </p>
         )}
-      </header>
+      </AppHeader>
 
-      <main className="px-6 py-6">
+      <main className="px-4 sm:px-6 py-6">
         {filtered.length === 0 ? (
           <p className="text-text-muted text-sm py-12 text-center">
             No artworks match the current filters.

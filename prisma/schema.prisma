@@ -74,6 +74,8 @@ model SubmittableSubmission {
   notes                     ReviewNote[]
   files                     SubmissionFile[]
   labels                    SubmissionLabel[]
+  assignments               SubmissionAssignment[]
+  decisions                 ReviewDecision[]
   // onDelete: SetNull matches the live constraint (verified directly
   // against pg_constraint, not inferred) — deleting the referenced ArtAsset
   // clears this rather than being blocked. scripts/process-submission.ts's
@@ -95,6 +97,11 @@ model SubmittableLabel {
   submittableLabelId String            @unique @map("submittable_label_id")
   name               String
   color              String?
+  /// Text colour Submittable pairs with `color` (the background).
+  foregroundColor    String?           @map("foreground_color")
+  /// false = retired in Submittable; kept for history, hidden from pickers.
+  active             Boolean           @default(true)
+  isConcealed        Boolean           @default(false) @map("is_concealed")
   rawJson            Json?             @map("raw_json")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
@@ -250,4 +257,64 @@ model ReviewAction {
   submission    SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("review_actions")
+}
+
+/// A Submittable team member who reviews submissions (Thomas, Jaden, …).
+/// Created by the sync script from each submission's `reviewers` user IDs,
+/// with names from POST /v4/organizations/team/list. `displayName` can be
+/// edited in-app; sync only fills it when empty. submittableUserId is null
+/// for a reviewer typed in by hand in the "Who's reviewing?" picker.
+model Reviewer {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submittableUserId String?                @unique @map("submittable_user_id")
+  displayName       String                 @map("display_name")
+  email             String?
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assignments       SubmissionAssignment[]
+  decisions         ReviewDecision[]
+
+  @@map("reviewers")
+}
+
+/// Who a submission is assigned to in Submittable. Mirrors the submission's
+/// `reviewers` array; replaced wholesale on every sync, never edited in-app.
+model SubmissionAssignment {
+  submissionId String                @map("submission_id") @db.Uuid
+  reviewerId   String                @map("reviewer_id") @db.Uuid
+  source       String                @default("submittable")
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  submission   SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reviewer     Reviewer              @relation(fields: [reviewerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([submissionId, reviewerId])
+  @@index([reviewerId], map: "idx_submission_assignments_reviewer_id")
+  @@map("submission_assignments")
+}
+
+/// One reviewer's Accept / Tiered Reject / Reject on a submission, posted to
+/// Submittable as a note. Append-only: Submittable notes can't be edited or
+/// deleted through the API, so changing your mind is a new row (and a new
+/// note); a reviewer's current decision is their latest row.
+///   decision:   "accept" | "tiered_reject" | "reject"
+///   pushStatus: "pending" | "pushed" | "failed"
+/// reviewerName is the name as written on the note (editable per note), so
+/// it's kept even if the Reviewer row is later renamed or removed.
+model ReviewDecision {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId String                @map("submission_id") @db.Uuid
+  reviewerId   String?               @map("reviewer_id") @db.Uuid
+  reviewerName String                @map("reviewer_name")
+  decision     String
+  comment      String?
+  noteText     String                @map("note_text")
+  pushStatus   String                @default("pending") @map("push_status")
+  pushError    String?               @map("push_error")
+  pushedAt     DateTime?             @map("pushed_at") @db.Timestamptz(6)
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  submission   SubmittableSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reviewer     Reviewer?             @relation(fields: [reviewerId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([submissionId, createdAt], map: "idx_review_decisions_submission_created")
+  @@map("review_decisions")
 }

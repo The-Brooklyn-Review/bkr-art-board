@@ -1,6 +1,6 @@
 # Spec — Submission Reviewer, Submittable sync, and Fall 2026 import
 
-Status: **draft, agreed in conversation 2026-10-12 — not yet implemented.**
+Status: **implemented on branch `reviewer-and-sync` (2026-10-13); schema applied to the live DB. Pending: first real label/note write-back check.**
 Scope: everything needed to (1) import the Fall 2026 open period, (2) keep the app's copy of Submittable current, (3) make the Submission Reviewer a real working tool that writes labels and review notes back to Submittable, and (4) re-scope the Art Gallery to the right subset.
 
 Read alongside `docs/ARCHITECTURE.md`. Two of its stated principles change under this spec and must be updated when this ships (see §11).
@@ -66,7 +66,7 @@ A new script, `scripts/sync-submittable.ts`, separate from the heavy importer:
 
 Triggers:
 
-- Scheduled GitHub Action once every 24 hours (new workflow alongside `tag-artwork.yml`). This also keeps the Supabase free tier awake, so `supabase-keepalive.yml` becomes redundant and can be removed once the sync workflow is proven.
+- Scheduled GitHub Action once every 24 hours (`.github/workflows/sync-submittable.yml`) (new workflow alongside `tag-artwork.yml`). This also keeps the Supabase free tier awake, so `supabase-keepalive.yml` becomes redundant and can be removed once the sync workflow is proven.
 - "Sync with Submittable" button in the app (server action, rate-limited to once per minute).
 - After any in-app write to Submittable, re-fetch that one submission (`GET /v4/submissions/{id}`) to confirm the change landed.
 
@@ -75,7 +75,7 @@ Triggers:
 Import is bursty, sync is routine. The Fall 2026 window is closed, so the bulk of the work arrives in **one import now**; the window may reopen up to twice more this school year (about a month total). Outside those windows only status, labels, and assignments change.
 
 - **Import** (`process-submission.ts`): run **manually on Thomas's Mac**, as today — once now, and once per reopened window. No CI import; PDF rendering has only ever been verified locally and doesn't need to move.
-- **Sync** (`sync-submittable.ts`): daily GitHub Action + in-app Sync button on Vercel. Metadata only. Newly discovered submissions that need importing are flagged "N new submissions waiting to import" in the UI — a reminder to run the importer, which only happens during an open window.
+- **Sync** (`sync-submittable.ts`): daily GitHub Action, plus automatic in-app syncing on Vercel — opening any page runs a background sync when the last one is over 10 minutes old (`autoSync`), and opening a submission re-reads that one submission's status and labels (`refreshSubmission`; Submittable has no webhooks to push changes). "Sync with Submittable now" in the reviewer menu is the manual escape hatch. Metadata only. Newly discovered submissions that need importing are flagged "N new submissions waiting to import" in the UI — a reminder to run the importer, which only happens during an open window.
 
 Environment values (all already exist in `.env.local`; they just haven't been needed outside Thomas's machine until now):
 
@@ -136,7 +136,7 @@ Endpoints (v4, confirmed against the OpenAPI spec saved at `docs/reference/submi
 
 ### 7.2 Review notes
 
-- Form: **reviewer name** (prefilled from the session identity, editable), **decision** (required: Accept / Tiered Reject / Reject), **comment** (optional; up to ~7,800 chars to stay under Submittable's 8,000 limit with the header).
+- Form: **decision** (required: Accept / Tiered Reject / Reject), **comment** (optional; up to ~7,800 chars to stay under Submittable's 8,000 limit with the header). The note is always signed with the reviewer chosen at sign-in (set server-side; not editable per note).
 - Note text:
 
   ```
@@ -168,7 +168,7 @@ Endpoints (v4, confirmed against the OpenAPI spec saved at `docs/reference/submi
 - Default filter: **undecided** statuses, assignment = **Mine**.
 - Filters: assignment (Mine / Unassigned / Everyone / a specific reviewer), status group (Undecided / Completed / Accepted / Declined / All), has-my-decision (yes/no), search (artist, title).
 - Row: thumbnail, artist, title, assigned reviewer name(s), Submittable status, art labels, decision chips per reviewer (e.g. "TM · Accept", "JS · —").
-- Header: "Last synced …" + Sync button. Nav link to and from the Gallery.
+- Header (shared with the Gallery, `AppHeader`): nav, "Synced …" status text (syncs in the background when stale), reviewer menu (Switch reviewer · Keyboard shortcuts · Sync now). Title, then filters: status tabs with counts, Assigned / My decision / Labels menus, search.
 
 ### 9.2 Reviewer — detail page `/submissions/[id]`
 
@@ -181,7 +181,7 @@ Endpoints (v4, confirmed against the OpenAPI spec saved at `docs/reference/submi
   3. Decisions: every reviewer's latest decision + history; then the decision form (§7.2).
   4. Cover letter / statement (collapsed).
   5. Legacy notes (if any).
-  6. "Page tools" (collapsed): page type, visibility, set thumbnail — existing behaviour.
+  6. Page actions live on the artwork's ⋯ menu: hide/show the page in the Gallery, use as cover image. Hidden pages carry an eye-slash in the page strip. (The page-type picker was dropped from the reviewer.)
 - Remove: the four-button local recommendation, the free-floating notes box, "Needs Submittable update" / "Done in Submittable" (superseded by sync).
 - Keyboard: `j`/`k` next/previous submission, `←`/`→` page, `1`/`2`/`3` select Accept / Tiered Reject / Reject (focus the comment), `⌘↵` submit, `l` focus labels.
 

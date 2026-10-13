@@ -50,9 +50,17 @@ export function ArtCard({
         />
       </div>
       <div className="pt-2 px-0.5">
-        <p className="font-[family-name:var(--font-display)] text-sm text-text truncate">
-          {asset.artistName}
-        </p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 font-[family-name:var(--font-display)] text-sm text-text truncate">
+            {asset.artistName}
+          </p>
+          {/* Which reading period — older cycles get published first. */}
+          {asset.period && (
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-text-muted border border-border px-1.5 py-px">
+              {asset.period.label}
+            </span>
+          )}
+        </div>
         {asset.submissionTitle && (
           <p className="text-xs text-text-muted truncate">{asset.submissionTitle}</p>
         )}
@@ -64,6 +72,9 @@ export function ArtCard({
         {/* "Available" is the default for every asset until the Pairing UI
             exists to change it — showing it on every card is just noise
             until that's real. Only surfaces once a state actually diverges. */}
+        {asset.publishedArtist && (
+          <p className="text-[11px] text-text-muted mt-0.5">Published artist</p>
+        )}
         {asset.usedState !== "available" && (
           <p className="text-[11px] text-text-muted mt-0.5">
             {USED_STATE_LABELS[asset.usedState] ?? asset.usedState}

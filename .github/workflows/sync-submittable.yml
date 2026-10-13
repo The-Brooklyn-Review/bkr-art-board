@@ -1,0 +1,37 @@
+name: Sync with Submittable
+
+# Daily: refresh status, labels and reviewer assignments from Submittable,
+# and delete withdrawn submissions (images included). Metadata only — new
+# submissions are listed in the log as "waiting to import" and imported by
+# running scripts/process-submission.ts locally. See
+# docs/SPEC-review-and-sync.md §5. Also keeps the Supabase free tier awake.
+
+on:
+  schedule:
+    # 10:17 UTC ≈ 6am New York — fresh before anyone starts reviewing.
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUBMITTABLE_API_KEY: ${{ secrets.SUBMITTABLE_API_KEY }}
+          SUBMITTABLE_API_BASE_URL: ${{ secrets.SUBMITTABLE_API_BASE_URL }}
+          CLOUDFLARE_R2_ENDPOINT: ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
+        run: npx tsx scripts/sync-submittable.ts

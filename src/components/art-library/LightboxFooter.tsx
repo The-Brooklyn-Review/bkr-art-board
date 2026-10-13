@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import { ChevronIcon } from "@/components/review/icons";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
 import { createShareLink } from "@/lib/actions/sharePreview";
@@ -170,8 +171,13 @@ export function LightboxFooter({
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 mb-3">
             {/* Left: Artist/Title/Metadata (star moved to footer) */}
             <div className="min-w-0 flex-1">
-              <p className="font-[family-name:var(--font-display)] text-lg text-text">
+              <p className="flex items-baseline gap-3 font-[family-name:var(--font-display)] text-lg text-text">
                 {asset.artistName}
+                {asset.period && (
+                  <span className="font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-text-muted border border-border px-1.5 py-px">
+                    {asset.period.label}
+                  </span>
+                )}
               </p>
               <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
               {knownLabels.length > 0 && (
@@ -282,7 +288,7 @@ export function LightboxFooter({
                 className="ml-auto flex items-center gap-0.5 text-xs text-text-muted hover:text-text transition-colors py-2 shrink-0 cursor-pointer"
               >
                 More actions
-                <span aria-hidden>›</span>
+                <ChevronIcon dir="right" className="w-3 h-3" />
               </button>
             </div>
           </div>

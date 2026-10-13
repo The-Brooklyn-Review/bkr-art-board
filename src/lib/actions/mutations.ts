@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAuth } from "@/lib/requireAuth";
 
 /**
  * Every mutation here is local-only — never touches Submittable. This app
@@ -18,6 +19,7 @@ export type LocalReviewRecommendation =
 export type PageType = "artwork" | "cover_statement" | "cv_bio" | "contact_sheet" | "unknown";
 
 export async function setAssetVisibility(assetId: string, visible: boolean) {
+  await requireAuth();
   const asset = await prisma.artAsset.findUniqueOrThrow({ where: { id: assetId } });
 
   await prisma.$transaction([
@@ -46,6 +48,7 @@ export async function setAssetVisibility(assetId: string, visible: boolean) {
 }
 
 export async function setSubmissionThumbnail(submissionId: string, assetId: string) {
+  await requireAuth();
   const submission = await prisma.submittableSubmission.findUniqueOrThrow({
     where: { id: submissionId },
   });
@@ -76,6 +79,7 @@ export async function setSubmissionThumbnail(submissionId: string, assetId: stri
 }
 
 export async function setPageType(assetId: string, pageType: PageType) {
+  await requireAuth();
   const asset = await prisma.artAsset.findUniqueOrThrow({ where: { id: assetId } });
 
   await prisma.$transaction([
@@ -99,6 +103,7 @@ export async function setLocalRecommendation(
   submissionId: string,
   recommendation: LocalReviewRecommendation,
 ) {
+  await requireAuth();
   const submission = await prisma.submittableSubmission.findUniqueOrThrow({
     where: { id: submissionId },
   });
@@ -122,6 +127,7 @@ export async function setLocalRecommendation(
 }
 
 export async function addReviewNote(submissionId: string, note: string) {
+  await requireAuth();
   if (!note.trim()) return;
 
   await prisma.$transaction([
@@ -135,6 +141,7 @@ export async function addReviewNote(submissionId: string, note: string) {
 }
 
 export async function setNeedsSubmittableUpdate(submissionId: string, needsUpdate: boolean) {
+  await requireAuth();
   await prisma.submittableSubmission.update({
     where: { id: submissionId },
     data: { needsSubmittableUpdate: needsUpdate },
@@ -143,6 +150,7 @@ export async function setNeedsSubmittableUpdate(submissionId: string, needsUpdat
 }
 
 export async function markSubmittableUpdateDone(submissionId: string) {
+  await requireAuth();
   await prisma.$transaction([
     prisma.submittableSubmission.update({
       where: { id: submissionId },
@@ -160,6 +168,7 @@ export async function markSubmittableUpdateDone(submissionId: string) {
 }
 
 export async function markAssetPublished(assetId: string) {
+  await requireAuth();
   try {
     const asset = await prisma.artAsset.findUniqueOrThrow({ where: { id: assetId } });
 
