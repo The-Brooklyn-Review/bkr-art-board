@@ -17,6 +17,7 @@ import {
   DECISIONS,
   decisionLabel,
   formatNoteText,
+  effectivePushStatus,
   latestDecisionPerReviewer,
   type Decision,
 } from "@/lib/reviewer/decisions";
@@ -478,11 +479,20 @@ function DecisionForm({
     if (!decision || pending) return;
     const posting = decision;
     start(async () => {
-      const r = await postDecision(submission.id, {
-        decision: posting,
-        reviewerName: name,
-        comment,
-      });
+      let r: Awaited<ReturnType<typeof postDecision>>;
+      try {
+        r = await postDecision(submission.id, { decision: posting, reviewerName: name, comment });
+      } catch {
+        // Unknown whether it was recorded or posted — don't invite a re-post.
+        setDecision(null);
+        setResult({
+          ok: false,
+          saved: true,
+          for: posting,
+          text: "Lost contact with the app while posting. Reload the page and check Decisions before posting again.",
+        });
+        return;
+      }
       if (r.ok) {
         // Clear the choice too: a second ⌘↵ must not post a duplicate note
         // (notes can't be deleted from Submittable).
@@ -657,7 +667,7 @@ function DecisionHistory({
               <DecisionChip
                 reviewerName={d.reviewerName}
                 decision={d.decision}
-                pushStatus={d.pushStatus}
+                pushStatus={effectivePushStatus(d)}
               />
               <span className="text-xs text-text-muted">{formatDateTime(d.createdAt)}</span>
               {d.reviewerId === reviewerId && (
@@ -665,28 +675,17 @@ function DecisionHistory({
               )}
             </div>
             {d.comment && <p className="mt-1 text-text-muted whitespace-pre-wrap">{d.comment}</p>}
-            {d.pushStatus !== "pushed" && (
-              <p className="mt-1 text-xs text-red-300">
-                {d.pushStatus === "failed"
-                  ? `Not posted to Submittable. ${d.pushError ?? ""}`
-                  : "Posting…"}
-                {d.pushStatus === "failed" && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      start(async () => {
-                        const r = await retryDecision(d.id);
-                        setError(r.ok ? null : r.error);
-                      })
-                    }
-                    className="ml-2 underline text-text"
-                  >
-                    {pending ? "Retrying…" : "Retry"}
-                  </button>
-                )}
-              </p>
-            )}
+            <DeliveryStatus
+              status={effectivePushStatus(d)}
+              error={d.pushError}
+              pending={pending}
+              onRetry={() =>
+                start(async () => {
+                  const r = await retryDecision(d.id);
+                  setError(r.ok ? null : r.error);
+                })
+              }
+            />
           </li>
         ))}
       </ul>
@@ -717,17 +716,22 @@ function LabelPicker({
       else c.delete(id);
       return c;
     });
-    const r = await setSubmissionLabel(submission.id, id, next);
-    if (!r.ok) {
-      setError(r.error);
-      setOn((s) => {
-        const c = new Set(s);
-        if (next) c.delete(id);
-        else c.add(id);
-        return c;
-      });
+    try {
+      const r = await setSubmissionLabel(submission.id, id, next);
+      if (!r.ok) {
+        setError(r.error);
+        setOn((s) => {
+          const c = new Set(s);
+          if (next) c.delete(id);
+          else c.add(id);
+          return c;
+        });
+      }
+    } catch {
+      setError("Couldn't reach the app server. Reload and check the label.");
+    } finally {
+      setBusy(null);
     }
-    setBusy(null);
   };
 
   return (
@@ -889,5 +893,44 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
         Close
       </button>
     </div>
+  );
+}
+
+/** Whether a decision's note reached Submittable, and what to do if not. */
+function DeliveryStatus({
+  status,
+  error,
+  pending,
+  onRetry,
+}: {
+  status: "pending" | "pushed" | "failed" | "unknown";
+  error: string | null;
+  pending: boolean;
+  onRetry: () => void;
+}) {
+  if (status === "pushed") return null;
+  if (status === "pending")
+    return <p className="mt-1 text-xs text-text-muted">Posting to Submittable…</p>;
+  const button = (label: string) => (
+    <button type="button" disabled={pending} onClick={onRetry} className="ml-2 underline text-text">
+      {pending ? "Posting…" : label}
+    </button>
+  );
+  if (status === "failed") {
+    return (
+      <p className="mt-1 text-xs text-red-300">
+        Submittable refused this note{error ? ` (${error.replace(/\.$/, "")})` : ""}. Nothing was
+        posted.
+        {button("Retry")}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-1 text-xs text-red-300">
+      Couldn&rsquo;t confirm this note reached Submittable
+      {error ? ` (${error.replace(/\.$/, "")})` : ""}. Check the submission&rsquo;s notes in
+      Submittable first — if it isn&rsquo;t there,
+      {button("post it again")}
+    </p>
   );
 }

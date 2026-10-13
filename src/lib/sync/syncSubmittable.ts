@@ -197,8 +197,12 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
           );
           continue;
         }
-        const created = await prisma.reviewer.create({
-          data: {
+        // upsert, not create: a concurrent sync (button + daily Action) may
+        // have created this reviewer a moment ago.
+        const created = await prisma.reviewer.upsert({
+          where: { submittableUserId: userId },
+          update: {},
+          create: {
             submittableUserId: userId,
             displayName: found?.name ?? placeholderName(userId),
             email: found?.email ?? null,
@@ -302,7 +306,8 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
       await prisma.$transaction([
         prisma.reviewAction.deleteMany({ where: { submissionId: l.id } }),
         prisma.reviewNote.deleteMany({ where: { submissionId: l.id } }),
-        prisma.submittableSubmission.delete({ where: { id: l.id } }),
+        // deleteMany: tolerant of a concurrent sync having deleted it already.
+        prisma.submittableSubmission.deleteMany({ where: { id: l.id } }),
       ]);
       summary.deleted.push(name);
       log(`  deleted withdrawn submission: ${name}`);

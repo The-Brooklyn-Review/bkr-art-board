@@ -1,5 +1,7 @@
 "use server";
 
+import { requireAuth } from "@/lib/requireAuth";
+
 import { prisma } from "@/lib/db";
 import { SHARE_LINK_TTL_MS, generateShareToken, hashShareToken } from "@/lib/sharePreview";
 
@@ -12,6 +14,7 @@ import { SHARE_LINK_TTL_MS, generateShareToken, hashShareToken } from "@/lib/sha
  * outside the URL handed to the caller; only its hash is stored.
  */
 export async function createShareLink(assetId: string): Promise<string> {
+  await requireAuth();
   const asset = await prisma.artAsset.findUniqueOrThrow({ where: { id: assetId } });
   if (!asset.visibleInArtLibrary || asset.usedState === "do_not_use") {
     throw new Error("This artwork can't be shared.");

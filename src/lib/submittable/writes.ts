@@ -17,6 +17,13 @@ export interface SubmittableSubmissionDetail {
 
 type Fetch = typeof submittableFetch;
 
+/**
+ * Writes give up after 20s. Without a timeout a hung request would run
+ * until the serverless function is killed, leaving the outcome unknowable.
+ */
+const WRITE_TIMEOUT_MS = 20_000;
+const timeout = () => AbortSignal.timeout(WRITE_TIMEOUT_MS);
+
 export function getSubmittableSubmission(
   submissionId: string,
   fetchImpl: Fetch = submittableFetch,
@@ -45,7 +52,7 @@ export async function applyLabel(
   try {
     await fetchImpl(
       `/v4/submissions/${encodeURIComponent(submissionId)}/labels/${encodeURIComponent(labelId)}`,
-      { method: "PUT" },
+      { method: "PUT", signal: timeout() },
     );
   } catch (err) {
     if (err instanceof SubmittableError && err.status === 400) {
@@ -64,7 +71,7 @@ export async function removeLabel(
   try {
     await fetchImpl(
       `/v4/submissions/${encodeURIComponent(submissionId)}/labels/${encodeURIComponent(labelId)}`,
-      { method: "DELETE" },
+      { method: "DELETE", signal: timeout() },
     );
   } catch (err) {
     if (err instanceof SubmittableError && (err.status === 400 || err.status === 404)) {
@@ -84,6 +91,7 @@ export async function addNote(
   await fetchImpl(`/v4/submissions/${encodeURIComponent(submissionId)}/notes`, {
     method: "POST",
     body: JSON.stringify({ note, noteVisibility }),
+    signal: timeout(),
   });
 }
 

@@ -115,6 +115,7 @@ export async function getLibraryAssets(
   const assets = await prisma.artAsset.findMany({
     where: {
       visibleInArtLibrary: true,
+      usedState: { not: "do_not_use" },
       submission: options.includePublished
         ? { OR: [GALLERY_SUBMISSION_FILTER, PUBLISHED_SUBMISSION_FILTER] }
         : GALLERY_SUBMISSION_FILTER,

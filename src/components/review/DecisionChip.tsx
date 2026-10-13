@@ -28,13 +28,13 @@ export function DecisionChip({
   pushStatus?: string;
   compact?: boolean;
 }) {
-  const failed = pushStatus === "failed";
+  const failed = pushStatus === "failed" || pushStatus === "unknown";
   return (
     <span
       className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 text-xs whitespace-nowrap ${
         DECISION_TONE[decision] ?? "text-text-muted border-border"
       }`}
-      title={`${reviewerName}: ${decisionLabel(decision)}${failed ? " — not posted to Submittable" : ""}`}
+      title={`${reviewerName}: ${decisionLabel(decision)}${failed ? " — not confirmed in Submittable" : ""}`}
     >
       <span className="text-text-muted">{compact ? initials(reviewerName) : reviewerName}</span>
       {decisionLabel(decision)}

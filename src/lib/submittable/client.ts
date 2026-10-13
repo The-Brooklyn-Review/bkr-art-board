@@ -11,7 +11,9 @@
  * components, route handlers, or standalone scripts.)
  */
 
-const BASE_URL = process.env.SUBMITTABLE_API_BASE_URL ?? "https://submittable-api.submittable.com";
+// `||`, not `??`: an unset GitHub Actions secret arrives as "", which must
+// fall back too.
+const BASE_URL = process.env.SUBMITTABLE_API_BASE_URL || "https://submittable-api.submittable.com";
 
 function getApiKey(): string {
   const key = process.env.SUBMITTABLE_API_KEY;

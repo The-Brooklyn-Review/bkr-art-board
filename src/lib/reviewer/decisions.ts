@@ -24,6 +24,20 @@ export const SUBMITTABLE_NOTE_MAX = 8000;
 export const COMMENT_MAX = 7800;
 export const REVIEWER_NAME_MAX = 80;
 
+/** A post still "pending" after this long was cut off and may be retried (after checking Submittable). */
+export const STALE_PENDING_MS = 2 * 60 * 1000;
+
+/**
+ * Delivery state as shown to reviewers: a long-pending post is treated
+ * like "unknown" — it may or may not have reached Submittable.
+ */
+export function effectivePushStatus(d: { pushStatus: string; createdAt: Date }, now = Date.now()) {
+  if (d.pushStatus === "pending" && now - new Date(d.createdAt).getTime() > STALE_PENDING_MS) {
+    return "unknown";
+  }
+  return d.pushStatus as "pending" | "pushed" | "failed" | "unknown";
+}
+
 /** Visibility for posted notes — Submittable's "Assigned Team" (believed; verify on first note). */
 export const NOTE_VISIBILITY = "team";
 

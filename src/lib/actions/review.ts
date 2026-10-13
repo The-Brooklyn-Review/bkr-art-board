@@ -2,21 +2,25 @@
 
 // Server actions behind the Submission Reviewer: choose who's reviewing,
 // toggle a label (pushed to Submittable), post a decision note (pushed to
-// Submittable), retry a failed note, and sync. See
-// docs/SPEC-review-and-sync.md §7–9. Submission *status* is never written.
+// Submittable), retry a note, and sync. See docs/SPEC-review-and-sync.md
+// §7–9. Submission *status* is never written.
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { isAuthenticated, requireAuth } from "@/lib/requireAuth";
+import { safeNextPath } from "@/lib/safeRedirect";
 import { REVIEWER_COOKIE_NAME, getCurrentReviewer } from "@/lib/reviewer/identity";
 import { isReviewerLabel } from "@/lib/reviewer/labels";
 import {
   NOTE_VISIBILITY,
   REVIEWER_NAME_MAX,
+  STALE_PENDING_MS,
   formatNoteText,
   validateDecisionInput,
   type Decision,
 } from "@/lib/reviewer/decisions";
+import { SubmittableError } from "@/lib/submittable/client";
 import {
   addNote,
   applyLabel,
@@ -25,23 +29,30 @@ import {
 } from "@/lib/submittable/writes";
 import { formatSyncSummary, lastSyncedAt, syncSubmittable } from "@/lib/sync/syncSubmittable";
 
-function safeNext(next: unknown): string {
-  const s = typeof next === "string" ? next : "";
-  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") ? s : "/submissions";
-}
+export type ActionResult =
+  | { ok: true; message?: string }
+  /** saved: the decision is recorded here but its note may not have reached Submittable — retry it, don't re-post. */
+  | { ok: false; error: string; saved?: boolean };
+
+const NOT_SIGNED_IN: ActionResult = {
+  ok: false,
+  error: "Your session has expired — sign in again.",
+};
+const NO_REVIEWER: ActionResult = { ok: false, error: "Choose who's reviewing first." };
 
 /** "Who's reviewing?" — pick a known reviewer or type a new name. */
 export async function chooseReviewer(formData: FormData) {
-  const next = safeNext(formData.get("next"));
+  await requireAuth();
+  const next = safeNextPath(formData.get("next"), "/submissions");
   const reviewerId = String(formData.get("reviewerId") ?? "");
   const newName = String(formData.get("newName") ?? "")
     .trim()
     .slice(0, REVIEWER_NAME_MAX);
 
   let id: string | null = null;
-  if (reviewerId && reviewerId !== "new") {
+  if (/^[0-9a-f-]{36}$/i.test(reviewerId)) {
     id = (await prisma.reviewer.findUnique({ where: { id: reviewerId } }))?.id ?? null;
-  } else if (newName) {
+  } else if (reviewerId === "new" && newName) {
     const existing = await prisma.reviewer.findFirst({
       where: { displayName: { equals: newName, mode: "insensitive" } },
     });
@@ -59,28 +70,25 @@ export async function chooseReviewer(formData: FormData) {
   redirect(next);
 }
 
-export type ActionResult =
-  | { ok: true; message?: string }
-  /** saved: the decision was recorded here but its note didn't reach Submittable — retry it, don't re-post. */
-  | { ok: false; error: string; saved?: boolean };
-
 /** Applies or removes one allowlisted label, in Submittable first, then locally. */
 export async function setSubmissionLabel(
   submissionId: string,
   submittableLabelId: string,
   on: boolean,
 ): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();
-  if (!reviewer) return { ok: false, error: "Choose who's reviewing first." };
-  if (!isReviewerLabel(submittableLabelId))
+  if (!reviewer) return NO_REVIEWER;
+  if (!isReviewerLabel(submittableLabelId)) {
     return { ok: false, error: "That label can't be set here." };
+  }
 
   const [submission, label] = await Promise.all([
     prisma.submittableSubmission.findUnique({ where: { id: submissionId } }),
     prisma.submittableLabel.findUnique({ where: { submittableLabelId } }),
   ]);
   if (!submission) return { ok: false, error: "Submission not found." };
-  if (!label) return { ok: false, error: "Label not synced yet — run Sync first." };
+  if (!label) return { ok: false, error: "Label not synced yet — press Sync first." };
 
   try {
     if (on) await applyLabel(submission.submittableId, submittableLabelId);
@@ -89,26 +97,42 @@ export async function setSubmissionLabel(
     return { ok: false, error: `Label not changed. ${describeSubmittableError(err)}` };
   }
 
-  await prisma.$transaction([
-    on
-      ? prisma.submissionLabel.upsert({
-          where: { submissionId_labelId: { submissionId, labelId: label.id } },
-          update: {},
-          create: { submissionId, labelId: label.id, source: "submittable" },
-        })
-      : prisma.submissionLabel.deleteMany({ where: { submissionId, labelId: label.id } }),
-    prisma.reviewAction.create({
-      data: {
-        submissionId,
-        actionType: on ? "label_applied" : "label_removed",
-        newValue: { label: label.name, submittableLabelId, by: reviewer.displayName },
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      on
+        ? prisma.submissionLabel.upsert({
+            where: { submissionId_labelId: { submissionId, labelId: label.id } },
+            update: {},
+            create: { submissionId, labelId: label.id, source: "submittable" },
+          })
+        : prisma.submissionLabel.deleteMany({ where: { submissionId, labelId: label.id } }),
+      prisma.reviewAction.create({
+        data: {
+          submissionId,
+          actionType: on ? "label_applied" : "label_removed",
+          newValue: { label: label.name, submittableLabelId, by: reviewer.displayName },
+        },
+      }),
+    ]);
+  } catch {
+    return {
+      ok: false,
+      error: "Changed in Submittable, but not saved here. Press Sync to bring the app up to date.",
+    };
+  }
   revalidatePath(`/submissions/${submissionId}`);
   return { ok: true };
 }
 
+/**
+ * Posts a decision's note. Expects the row to be claimed (`pending`).
+ * Outcome:
+ *   pushed  — Submittable accepted it.
+ *   failed  — Submittable definitely refused it (a 4xx): safe to retry.
+ *   unknown — timeout, network error or 5xx: it may have been stored, and
+ *             notes can't be listed or deleted through the API, so the
+ *             reviewer must check Submittable before re-posting.
+ */
 async function pushDecision(decisionId: string): Promise<ActionResult> {
   const d = await prisma.reviewDecision.findUniqueOrThrow({
     where: { id: decisionId },
@@ -117,30 +141,40 @@ async function pushDecision(decisionId: string): Promise<ActionResult> {
   try {
     await addNote(d.submission.submittableId, d.noteText, NOTE_VISIBILITY);
   } catch (err) {
+    const definite = err instanceof SubmittableError && err.status >= 400 && err.status < 500;
     const error = describeSubmittableError(err);
     await prisma.reviewDecision.update({
       where: { id: decisionId },
-      data: { pushStatus: "failed", pushError: error },
+      data: { pushStatus: definite ? "failed" : "unknown", pushError: error },
     });
     return {
       ok: false,
       saved: true,
-      error: `Saved here, but not posted to Submittable (${error.replace(/\.$/, "")}). Use Retry under Decisions.`,
+      error: definite
+        ? `Saved here, but Submittable refused the note (${error.replace(/\.$/, "")}). Use Retry under Decisions.`
+        : `Saved here, but couldn't confirm the note reached Submittable (${error.replace(/\.$/, "")}). Check the submission's notes in Submittable before retrying.`,
     };
   }
-  await prisma.$transaction([
-    prisma.reviewDecision.update({
-      where: { id: decisionId },
-      data: { pushStatus: "pushed", pushError: null, pushedAt: new Date() },
-    }),
-    prisma.reviewAction.create({
-      data: {
-        submissionId: d.submissionId,
-        actionType: "decision_posted",
-        newValue: { decision: d.decision, reviewer: d.reviewerName, decisionId },
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.reviewDecision.update({
+        where: { id: decisionId },
+        data: { pushStatus: "pushed", pushError: null, pushedAt: new Date() },
+      }),
+      prisma.reviewAction.create({
+        data: {
+          submissionId: d.submissionId,
+          actionType: "decision_posted",
+          newValue: { decision: d.decision, reviewer: d.reviewerName, decisionId },
+        },
+      }),
+    ]);
+  } catch {
+    return {
+      ok: true,
+      message: "Posted to Submittable, but not marked as posted here — don't post it again.",
+    };
+  }
   return { ok: true, message: "Posted to Submittable." };
 }
 
@@ -149,8 +183,9 @@ export async function postDecision(
   submissionId: string,
   input: { decision: string; reviewerName: string; comment: string },
 ): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();
-  if (!reviewer) return { ok: false, error: "Choose who's reviewing first." };
+  if (!reviewer) return NO_REVIEWER;
   const invalid = validateDecisionInput(input);
   if (invalid) {
     const messages = {
@@ -183,13 +218,32 @@ export async function postDecision(
   return result;
 }
 
-/** Re-posts a decision whose note failed to reach Submittable. */
+/**
+ * Re-posts a decision's note. Claims the row atomically first, so two tabs
+ * (or a double click) can't both post it.
+ */
 export async function retryDecision(decisionId: string): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();
-  if (!reviewer) return { ok: false, error: "Choose who's reviewing first." };
+  if (!reviewer) return NO_REVIEWER;
+  const claimed = await prisma.reviewDecision.updateMany({
+    where: {
+      id: decisionId,
+      OR: [
+        { pushStatus: { in: ["failed", "unknown"] } },
+        // A post that never finished (e.g. the function was cut off).
+        { pushStatus: "pending", createdAt: { lt: new Date(Date.now() - STALE_PENDING_MS) } },
+      ],
+    },
+    data: { pushStatus: "pending" },
+  });
   const d = await prisma.reviewDecision.findUnique({ where: { id: decisionId } });
   if (!d) return { ok: false, error: "Decision not found." };
-  if (d.pushStatus === "pushed") return { ok: true, message: "Already posted." };
+  if (claimed.count !== 1) {
+    return d.pushStatus === "pushed"
+      ? { ok: true, message: "Already posted." }
+      : { ok: false, error: "This note is already being posted." };
+  }
   const result = await pushDecision(decisionId);
   revalidatePath(`/submissions/${d.submissionId}`);
   return result;
@@ -197,8 +251,9 @@ export async function retryDecision(decisionId: string): Promise<ActionResult> {
 
 /** The Sync button. Metadata only; at most once a minute. */
 export async function syncNow(): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();
-  if (!reviewer) return { ok: false, error: "Choose who's reviewing first." };
+  if (!reviewer) return NO_REVIEWER;
   const last = await lastSyncedAt();
   if (last && Date.now() - last.getTime() < 60_000) {
     return { ok: true, message: "Synced less than a minute ago." };

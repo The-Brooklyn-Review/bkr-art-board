@@ -174,3 +174,42 @@ export async function getReviewers() {
     },
   });
 }
+
+/**
+ * Next/previous for a submission that isn't (or is no longer) in the
+ * filtered list — e.g. you just decided it under "Not yet decided by me",
+ * or opened it from the gallery. Uses the list's own sort key (artist
+ * name, then id) so J continues from where you were, not from the top.
+ */
+export async function neighborsOutside(
+  f: QueueFilters,
+  reviewerId: string,
+  current: { id: string; artistName: string | null },
+): Promise<{ prevId: string | null; nextId: string | null }> {
+  if (current.artistName === null) return { prevId: null, nextId: null };
+  const base = queueWhere(f, reviewerId);
+  const name = current.artistName;
+  const [next, prev] = await Promise.all([
+    prisma.submittableSubmission.findFirst({
+      where: {
+        AND: [
+          base,
+          { OR: [{ artistName: { gt: name } }, { artistName: name, id: { gt: current.id } }] },
+        ],
+      },
+      orderBy: [{ artistName: "asc" }, { id: "asc" }],
+      select: { id: true },
+    }),
+    prisma.submittableSubmission.findFirst({
+      where: {
+        AND: [
+          base,
+          { OR: [{ artistName: { lt: name } }, { artistName: name, id: { lt: current.id } }] },
+        ],
+      },
+      orderBy: [{ artistName: "desc" }, { id: "desc" }],
+      select: { id: true },
+    }),
+  ]);
+  return { prevId: prev?.id ?? null, nextId: next?.id ?? null };
+}

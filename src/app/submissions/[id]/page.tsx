@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSubmission } from "@/lib/submissions/getSubmission";
 import { getCurrentReviewer } from "@/lib/reviewer/identity";
 import { parseFilters, filtersToQuery } from "@/lib/submissions/filters";
-import { getQueue } from "@/lib/submissions/queue";
+import { getQueue, neighborsOutside } from "@/lib/submissions/queue";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
 import { formatDateTime } from "@/lib/format";
 import { SubmissionReviewClient } from "@/components/submissions/SubmissionReviewClient";
@@ -33,10 +33,12 @@ export default async function SubmissionReviewPage({
   if (!submission) notFound();
 
   const index = queue.findIndex((q) => q.id === id);
-  // Opened from outside the current list (e.g. the gallery's Review link):
-  // next/previous fall back to the list's ends rather than disappearing.
-  const prevId = index > 0 ? queue[index - 1].id : null;
-  const nextId = index >= 0 ? (queue[index + 1]?.id ?? null) : (queue[0]?.id ?? null);
+  const { prevId, nextId } =
+    index >= 0
+      ? { prevId: queue[index - 1]?.id ?? null, nextId: queue[index + 1]?.id ?? null }
+      : // Not in the list (just decided under "Not yet decided by me", or
+        // opened from the gallery): continue from its place in the order.
+        await neighborsOutside(filters, reviewer.id, submission);
 
   return (
     // Keyed per submission: J/K navigation remounts it, so the page index,
@@ -51,7 +53,9 @@ export default async function SubmissionReviewPage({
         submissionTitle: q.submissionTitle,
         myDecision: q.decisions.find((d) => d.reviewerId === reviewer.id)?.decision ?? null,
         myDecisionFailed: q.decisions.some(
-          (d) => d.reviewerId === reviewer.id && d.pushStatus === "failed",
+          (d) =>
+            d.reviewerId === reviewer.id &&
+            (d.pushStatus === "failed" || d.pushStatus === "unknown"),
         ),
       }))}
       position={{ index, total: queue.length, prevId, nextId }}
