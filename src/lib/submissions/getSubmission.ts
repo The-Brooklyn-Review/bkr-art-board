@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { submissionDateOf } from "@/lib/submittable/readingPeriod";
 import { getSignedR2Url } from "@/lib/storage/r2";
 
 export interface ReviewAsset {
@@ -51,6 +52,8 @@ export interface SubmissionDetail {
   submittableUrl: string | null;
   thumbnailAssetId: string | null;
   lastSyncedAt: Date | null;
+  /** When it was submitted (Submittable's submissionDate), ISO; null if unknown. */
+  submittedAt: string | null;
   /** Submittable label IDs currently on the submission. */
   labelIds: string[];
   reviewers: { id: string; name: string }[];
@@ -130,6 +133,7 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
     submittableUrl: webBase ? `${webBase}/submissions/${submission.submittableId}` : null,
     thumbnailAssetId: submission.thumbnailAssetId,
     lastSyncedAt: submission.lastSyncedAt,
+    submittedAt: submissionDateOf(submission.rawSubmissionJson),
     labelIds: submission.labels.map((l) => l.label.submittableLabelId),
     reviewers: submission.assignments.map((a) => ({
       id: a.reviewer.id,

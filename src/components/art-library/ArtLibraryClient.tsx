@@ -102,6 +102,9 @@ export function ArtLibraryClient({
   const [search, setSearch] = useState("");
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
+  // Reading period ("Winter ’25", "Fall ’26"): the coarsest cut — which
+  // cycle's work you're choosing from — so it sits above the label chips.
+  const [period, setPeriod] = useState<string>("all");
   const [density, setDensity] = useState<"compact" | "default" | "large">("default");
   // Tracked by asset ID rather than index into `filtered` — an index would
   // go stale the instant `removeAsset` (or a search/filter change) shifts
@@ -143,6 +146,24 @@ export function ArtLibraryClient({
     });
   }, [assets]);
 
+  // Periods present, oldest first, with how many submissions each has.
+  const periods = useMemo(() => {
+    const byId = new Map<
+      string,
+      { id: string; label: string; sortKey: number; subs: Set<string> }
+    >();
+    for (const a of assets) {
+      if (!a.period) continue;
+      const p = byId.get(a.period.id) ?? { ...a.period, subs: new Set<string>() };
+      p.subs.add(a.submissionId);
+      byId.set(a.period.id, p);
+    }
+    return [...byId.values()].sort((x, y) => x.sortKey - y.sortKey);
+  }, [assets]);
+  // A period that no longer exists (e.g. after toggling published off)
+  // falls back to all.
+  const activePeriod = periods.some((p) => p.id === period) ? period : "all";
+
   const filtered = useMemo(() => {
     let results = assets;
 
@@ -153,7 +174,8 @@ export function ArtLibraryClient({
     }
 
     // Then apply other filters
-    return results.filter((a) => {
+    const kept = results.filter((a) => {
+      if (activePeriod !== "all" && a.period?.id !== activePeriod) return false;
       // Check starred filter if enabled
       if (showStarredOnly) {
         const isStarred =
@@ -168,14 +190,18 @@ export function ArtLibraryClient({
       }
       return true;
     });
-  }, [assets, search, activeLabels, showStarredOnly, fuse]);
+    // Oldest reading period first (it's the one to publish from first);
+    // a search keeps its relevance order instead.
+    if (search.trim()) return kept;
+    return [...kept].sort((x, y) => (x.period?.sortKey ?? 0) - (y.period?.sortKey ?? 0));
+  }, [assets, search, activeLabels, showStarredOnly, fuse, activePeriod]);
 
   // A fresh filter/search should show the first batch again, not whatever
   // scroll position happened to reveal under the old result set.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting pagination on filter change, not worth the in-render-adjustment rewrite at this list size
     setVisibleCount(GRID_BATCH_SIZE);
-  }, [search, activeLabels, showStarredOnly]);
+  }, [search, activeLabels, showStarredOnly, activePeriod]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -376,6 +402,40 @@ export function ArtLibraryClient({
           {/* Label pills on desktop. Phones get search + one Filters sheet
               instead: a sideways-scrolling strip hid most of the labels
               without any sign there were more. */}
+          {periods.length > 1 && (
+            <>
+              <div
+                className="hidden sm:flex border border-border"
+                role="group"
+                aria-label="Reading period"
+              >
+                {[{ id: "all", label: "All", subs: null as Set<string> | null }, ...periods].map(
+                  (p) => {
+                    const on = activePeriod === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPeriod(p.id)}
+                        aria-pressed={on}
+                        className={`text-xs px-3 py-1.5 border-r border-border last:border-r-0 whitespace-nowrap transition-colors ${
+                          on
+                            ? "bg-surface text-text shadow-[inset_0_-2px_0_var(--color-accent)]"
+                            : "text-text-muted hover:text-text hover:bg-bg-hover"
+                        }`}
+                      >
+                        {p.label}
+                        {p.subs && (
+                          <span className="ml-1.5 tabular-nums text-text-muted">{p.subs.size}</span>
+                        )}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+              <span aria-hidden className="hidden sm:block w-px h-5 bg-border mx-1" />
+            </>
+          )}
           <div className="hidden sm:flex flex-wrap gap-2">
             <button
               onClick={() => setShowStarredOnly(!showStarredOnly)}
@@ -448,6 +508,27 @@ export function ArtLibraryClient({
                 </span>
               }
             >
+              {periods.length > 1 && (
+                <>
+                  <MenuHeading>Reading period</MenuHeading>
+                  <MenuRadio checked={activePeriod === "all"} onSelect={() => setPeriod("all")}>
+                    All periods
+                  </MenuRadio>
+                  {periods.map((p) => (
+                    <MenuRadio
+                      key={p.id}
+                      checked={activePeriod === p.id}
+                      onSelect={() => setPeriod(p.id)}
+                    >
+                      <span className="flex justify-between gap-3">
+                        {p.label}
+                        <span className="text-text-muted tabular-nums">{p.subs.size}</span>
+                      </span>
+                    </MenuRadio>
+                  ))}
+                  <MenuDivider />
+                </>
+              )}
               <MenuHeading>Show</MenuHeading>
               <MenuCheckbox
                 checked={showStarredOnly}

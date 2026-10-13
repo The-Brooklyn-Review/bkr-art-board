@@ -171,8 +171,13 @@ export function LightboxFooter({
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 mb-3">
             {/* Left: Artist/Title/Metadata (star moved to footer) */}
             <div className="min-w-0 flex-1">
-              <p className="font-[family-name:var(--font-display)] text-lg text-text">
+              <p className="flex items-baseline gap-3 font-[family-name:var(--font-display)] text-lg text-text">
                 {asset.artistName}
+                {asset.period && (
+                  <span className="font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-text-muted border border-border px-1.5 py-px">
+                    {asset.period.label}
+                  </span>
+                )}
               </p>
               <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
               {knownLabels.length > 0 && (

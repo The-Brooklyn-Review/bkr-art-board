@@ -22,6 +22,7 @@ import {
   type Decision,
 } from "@/lib/reviewer/decisions";
 import { displayStatus } from "@/lib/submittable/statuses";
+import { readingPeriodOf } from "@/lib/submittable/readingPeriod";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { DECISION_TONE } from "@/components/review/DecisionChip";
 import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
@@ -608,6 +609,19 @@ function SubmissionHeader({
       </div>
 
       <dl className="mt-4 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+        {submission.submittedAt &&
+          row(
+            "Submitted",
+            <>
+              {formatDate(new Date(submission.submittedAt))}
+              {readingPeriodOf(submission.submittedAt) && (
+                <span className="text-text-muted">
+                  {" · "}
+                  {readingPeriodOf(submission.submittedAt)!.label}
+                </span>
+              )}
+            </>,
+          )}
         {row("Status", displayStatus(submission.officialStatus))}
         {row("Assigned", assigned)}
         {row(
