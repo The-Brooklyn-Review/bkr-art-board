@@ -32,6 +32,9 @@ export interface Label {
   backgroundColor: string | null;
   foregroundColor: string | null;
   count: number | null;
+  /** false = retired in Submittable. */
+  active?: boolean;
+  isConcealed?: boolean;
 }
 
 /** GET /v4/submissions → items (list shape; labels are ID strings here) */

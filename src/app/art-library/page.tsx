@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { getCurrentReviewer } from "@/lib/reviewer/identity";
 import { getLibraryAssets } from "@/lib/art-library/getAssets";
 import { ArtLibraryClient } from "@/components/art-library/ArtLibraryClient";
 
@@ -11,19 +11,22 @@ export const dynamic = "force-dynamic";
 export default async function ArtLibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asset?: string }>;
+  searchParams: Promise<{ asset?: string; published?: string }>;
 }) {
-  const [assets, submissionCount, { asset }] = await Promise.all([
-    getLibraryAssets(),
-    prisma.submittableSubmission.count({ where: { processingStatus: "processed" } }),
-    searchParams,
+  const { asset, published } = await searchParams;
+  const includePublished = published === "1";
+  const [assets, reviewer] = await Promise.all([
+    getLibraryAssets({ includePublished }),
+    getCurrentReviewer(),
   ]);
 
   return (
     <ArtLibraryClient
       assets={assets}
-      submissionCount={submissionCount}
+      submissionCount={new Set(assets.map((a) => a.submissionId)).size}
       initialAssetId={asset ?? null}
+      includePublished={includePublished}
+      reviewerName={reviewer?.displayName ?? null}
     />
   );
 }

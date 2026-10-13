@@ -10,6 +10,8 @@ import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
 import { ZoomableLightbox } from "./ZoomableLightbox";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
+import Link from "next/link";
+import { AppNav } from "@/components/review/AppNav";
 
 // Matches the "30-60 visible cards feel manageable" density guidance —
 // also caps how many masonry items mount at once, which is the actual
@@ -62,10 +64,15 @@ export function ArtLibraryClient({
   assets: initialAssets,
   submissionCount,
   initialAssetId,
+  includePublished,
+  reviewerName,
 }: {
   assets: LibraryAsset[];
   submissionCount: number;
   initialAssetId: string | null;
+  /** Also showing work from already-accepted submissions (?published=1). */
+  includePublished: boolean;
+  reviewerName: string | null;
 }) {
   // Local, mutable copy of the server-fetched list. Publishing or hiding an
   // asset updates this in place (see removeAsset below) instead of
@@ -323,6 +330,9 @@ export function ArtLibraryClient({
           headerHidden ? "-translate-y-full" : "translate-y-0"
         }`}
       >
+        <div className="mb-3 sm:mb-4">
+          <AppNav current="gallery" reviewerName={reviewerName} />
+        </div>
         <div className="flex items-start justify-between gap-3">
           {/* Title + count sit on one baseline-aligned line, wrapping to
               their own stacked lines only if they don't fit (narrow
@@ -356,6 +366,20 @@ export function ArtLibraryClient({
             >
               ⭐ Your stars
             </button>
+            {/* Server-side filter (a different query), so it's a link that
+                re-renders the page rather than client state. */}
+            <Link
+              href={includePublished ? "/art-library" : "/art-library?published=1"}
+              aria-pressed={includePublished}
+              className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
+                includePublished
+                  ? "bg-accent text-bg border-accent"
+                  : "border-border text-text-muted hover:border-accent hover:text-text"
+              }`}
+              title="Also show work from submissions already accepted in Submittable"
+            >
+              Include published artists
+            </Link>
             {KNOWN_LABELS.map((label) => (
               <button
                 key={label}

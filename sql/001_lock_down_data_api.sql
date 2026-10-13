@@ -32,3 +32,7 @@ alter table public.art_assets              enable row level security;
 alter table public.shared_artwork_links    enable row level security;
 alter table public.review_notes            enable row level security;
 alter table public.review_actions          enable row level security;
+-- Added 2026-10 with the reviewer tables (see 003_lock_down_reviewer_tables.sql).
+alter table public.reviewers              enable row level security;
+alter table public.submission_assignments enable row level security;
+alter table public.review_decisions       enable row level security;

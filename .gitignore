@@ -46,3 +46,6 @@ next-env.d.ts
 
 # working review checklist for human-in-the-loop QA — not project docs
 /REVIEW_NOTES.md
+
+# local database dumps (contain artist contact details)
+/backups

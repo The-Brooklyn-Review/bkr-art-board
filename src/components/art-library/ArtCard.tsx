@@ -64,6 +64,9 @@ export function ArtCard({
         {/* "Available" is the default for every asset until the Pairing UI
             exists to change it — showing it on every card is just noise
             until that's real. Only surfaces once a state actually diverges. */}
+        {asset.publishedArtist && (
+          <p className="text-[11px] text-text-muted mt-0.5">Published artist</p>
+        )}
         {asset.usedState !== "available" && (
           <p className="text-[11px] text-text-muted mt-0.5">
             {USED_STATE_LABELS[asset.usedState] ?? asset.usedState}
