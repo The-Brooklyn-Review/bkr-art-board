@@ -9,7 +9,6 @@ import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutati
 import {
   confirmDecisionPosted,
   postDecision,
-  refreshSubmission,
   retryDecision,
   setSubmissionLabel,
 } from "@/lib/actions/review";
@@ -120,7 +119,8 @@ export function SubmissionReviewClient({
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
-      refreshSubmission(submission.id)
+      fetch(`/api/submissions/${submission.id}/refresh`, { method: "POST" })
+        .then((res) => res.json() as Promise<{ changed: boolean }>)
         .then((r) => {
           if (!cancelled && r.changed) router.refresh();
         })
@@ -145,9 +145,13 @@ export function SubmissionReviewClient({
     // is how you get to the box there, and focusing would pop the keyboard.
   }, []);
 
+  // Moving between submissions keeps this page on screen until the next
+  // one is ready (no blank flash); the bar under the header shows it's on
+  // its way.
+  const [navigating, startNavigation] = useTransition();
   const go = useCallback(
     (id: string | null) => {
-      if (id) router.push(`/submissions/${id}${query}`);
+      if (id) startNavigation(() => router.push(`/submissions/${id}${query}`));
     },
     [router, query],
   );
@@ -194,7 +198,13 @@ export function SubmissionReviewClient({
     // three columns scroll, each on its own.
     <div className="bg-bg text-text flex flex-col pb-24 lg:pb-0 lg:fixed lg:inset-0 lg:overflow-clip">
       {/* Top bar: where you are in the queue, and how to move through it */}
-      <header className="border-b border-border px-4 lg:pr-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
+      <header className="relative border-b border-border px-4 lg:pr-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
+        {navigating && (
+          <span
+            aria-hidden
+            className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent/80 animate-pulse"
+          />
+        )}
         <button
           type="button"
           onClick={toggleQueue}

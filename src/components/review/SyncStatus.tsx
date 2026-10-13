@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { autoSync, syncNow } from "@/lib/actions/review";
+import { syncNow } from "@/lib/actions/review";
+
+type AutoSyncResult = { ok: true; ran: boolean; changed: boolean } | { ok: false; error: string };
+
+async function autoSync(): Promise<AutoSyncResult> {
+  const res = await fetch("/api/sync", { method: "POST" });
+  return (await res.json()) as AutoSyncResult;
+}
 
 /** Fired by "Sync now" in the reviewer menu. */
 export const SYNC_NOW_EVENT = "bkr:sync-now";
