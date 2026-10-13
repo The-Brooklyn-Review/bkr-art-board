@@ -195,6 +195,9 @@ export async function postDecision(
   if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();
   if (!reviewer) return NO_REVIEWER;
+  // Notes are always signed with the reviewer chosen at sign-in; the
+  // client's name (if any) is ignored.
+  input = { ...input, reviewerName: reviewer.displayName };
   const invalid = validateDecisionInput(input);
   if (invalid) {
     const messages = {

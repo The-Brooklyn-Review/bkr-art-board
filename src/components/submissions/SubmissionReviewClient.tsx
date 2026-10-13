@@ -473,7 +473,7 @@ function useDecisionDraft(
   setDecision: (d: Decision | null) => void,
 ) {
   const [comment, setComment] = useState("");
-  const [name, setName] = useState(reviewerName);
+  const name = reviewerName;
   const [pending, start] = useTransition();
   // Each result remembers the decision it was about, and only shows while
   // that's still the draft — a stale error never lingers after you move on.
@@ -524,7 +524,6 @@ function useDecisionDraft(
     comment,
     setComment,
     name,
-    setName,
     pending,
     result,
     showResult,
@@ -676,8 +675,7 @@ function DecisionForm({
   nextId: string | null;
   onNext: () => void;
 }) {
-  const [editingName, setEditingName] = useState(false);
-  const { comment, setComment, name, setName, pending, result, showResult, submit } = draft;
+  const { comment, setComment, name, pending, result, showResult, submit } = draft;
   // Already decided: show that decision, with the form one click away.
   // Choosing 1–3 (or any decision) opens it too.
   const [changing, setChanging] = useState(false);
@@ -800,31 +798,10 @@ function DecisionForm({
           </label>
 
           <div>
-            <div className="flex items-baseline justify-between gap-3 mb-1.5 text-xs text-text-muted">
-              <span>Posts to Submittable as a note for the editors</span>
-              {editingName ? null : (
-                <button
-                  type="button"
-                  onClick={() => setEditingName(true)}
-                  className="underline hover:text-text whitespace-nowrap"
-                  title="Change the name on the note"
-                >
-                  Edit name
-                </button>
-              )}
-            </div>
-            {editingName && (
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setEditingName(false)}
-                onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
-                autoFocus
-                maxLength={80}
-                aria-label="Name on the note"
-                className="mb-2 w-full bg-surface border border-border text-sm text-text px-3 py-1.5 outline-none focus:border-accent"
-              />
-            )}
+            {/* Signed with the reviewer chosen at sign-in — no per-note editing. */}
+            <p className="mb-1.5 text-xs text-text-muted">
+              Posts to Submittable as a note for the editors
+            </p>
             <pre className="whitespace-pre-wrap font-[family-name:var(--font-ui)] text-sm text-text/90 bg-surface/60 border border-dashed border-border px-3 py-2.5 max-h-40 overflow-y-auto">
               {preview}
             </pre>

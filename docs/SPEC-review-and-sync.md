@@ -136,7 +136,7 @@ Endpoints (v4, confirmed against the OpenAPI spec saved at `docs/reference/submi
 
 ### 7.2 Review notes
 
-- Form: **reviewer name** (prefilled from the session identity, editable), **decision** (required: Accept / Tiered Reject / Reject), **comment** (optional; up to ~7,800 chars to stay under Submittable's 8,000 limit with the header).
+- Form: **decision** (required: Accept / Tiered Reject / Reject), **comment** (optional; up to ~7,800 chars to stay under Submittable's 8,000 limit with the header). The note is always signed with the reviewer chosen at sign-in (set server-side; not editable per note).
 - Note text:
 
   ```
