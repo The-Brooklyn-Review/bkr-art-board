@@ -114,11 +114,15 @@ export function useModalTransition(
 
   useEffect(() => {
     if (!open) return;
+    // Capture phase + stopPropagation: Escape closes only this modal, not
+    // the gallery lightbox open underneath it too.
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open, onClose]);
 
   return { rendered, visible };
