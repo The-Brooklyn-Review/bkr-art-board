@@ -10,7 +10,21 @@ import {
   DEFAULT_FILTERS,
   type QueueFilters,
 } from "@/lib/submissions/filters";
+import { Menu, MenuCheckbox, MenuDivider, MenuLink } from "@/components/review/Menu";
 
+const MINE_OPTIONS = [
+  ["any", "Any", "Any"],
+  ["todo", "Not decided by me yet", "Not yet"],
+  ["done", "Decided by me", "Decided"],
+] as const;
+
+/**
+ * Two tiers in one row (wrapping on narrow screens):
+ *   status — the primary split, always visible with counts;
+ *   Assigned / My decision / Labels — menus that show their current value;
+ *   search — fills what's left.
+ * Same control vocabulary as the gallery's filter row.
+ */
 export function QueueFilterBar({
   filters,
   statusCounts,
@@ -31,115 +45,181 @@ export function QueueFilterBar({
   // Debounced search — typing shouldn't fire a server render per keystroke.
   useEffect(() => {
     if (q === filters.q) return;
-    const t = setTimeout(() => router.replace(href({ q })), 300);
+    const t = setTimeout(() => router.replace(href({ q }), { scroll: false }), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- href is derived from filters
   }, [q]);
 
-  const segment = (active: boolean) =>
-    `px-3 py-1.5 text-sm border-r border-border last:border-r-0 transition-colors whitespace-nowrap ${
-      active ? "bg-surface text-text" : "text-text-muted hover:text-text"
-    }`;
+  // Picking several labels in a row: each click must build on the last,
+  // not on the URL that hasn't caught up yet — so hold the selection here
+  // until the server render reflects it.
+  const [pendingLabels, setPendingLabels] = useState<string[] | null>(null);
+  if (pendingLabels && pendingLabels.join() === filters.labels.join()) setPendingLabels(null);
+  const selectedLabels = pendingLabels ?? filters.labels;
+  const toggleLabel = (id: string) => {
+    const next = selectedLabels.includes(id)
+      ? selectedLabels.filter((l) => l !== id)
+      : [...selectedLabels, id];
+    setPendingLabels(next);
+    router.replace(href({ labels: next }), { scroll: false });
+  };
 
-  const toggleLabel = (id: string) =>
-    filters.labels.includes(id) ? filters.labels.filter((l) => l !== id) : [...filters.labels, id];
-
-  const assignedValue = filters.assigned === currentReviewerId ? "me" : filters.assigned;
+  const assigned = filters.assigned === currentReviewerId ? "me" : filters.assigned;
+  const others = reviewers.filter((r) => r.id !== currentReviewerId);
+  const assignedLabel =
+    assigned === "me"
+      ? "Me"
+      : assigned === "all"
+        ? "Everyone"
+        : assigned === "unassigned"
+          ? "No one"
+          : (others.find((r) => r.id === assigned)?.name ?? "Reviewer");
+  const mineLabel = MINE_OPTIONS.find(([v]) => v === filters.mine)![2];
+  const labelName = (id: string) => labels.find((l) => l.submittableLabelId === id)?.name ?? "?";
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          className="flex border border-border overflow-x-auto scrollbar-hide"
-          role="group"
-          aria-label="Status"
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Status: the primary split. Scrolls sideways on a phone rather than wrapping. */}
+        <div className="w-full sm:w-auto -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+          <div className="flex w-max border border-border" role="group" aria-label="Status">
+            {STATUS_GROUPS.map((g) => {
+              const on = filters.status === g.value;
+              return (
+                <Link
+                  key={g.value}
+                  href={href({ status: g.value })}
+                  scroll={false}
+                  aria-current={on ? "true" : undefined}
+                  className={`text-xs px-3 py-1.5 border-r border-border last:border-r-0 whitespace-nowrap transition-colors ${
+                    on
+                      ? "bg-surface text-text shadow-[inset_0_-2px_0_var(--color-accent)]"
+                      : "text-text-muted hover:text-text hover:bg-bg-hover"
+                  }`}
+                >
+                  {g.label}
+                  <span
+                    className={`ml-1.5 tabular-nums ${on ? "text-text-muted" : "text-text-muted/70"}`}
+                  >
+                    {statusCounts[g.value]}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <span aria-hidden className="hidden sm:block w-px h-5 bg-border mx-1" />
+
+        <Menu
+          active={assigned !== DEFAULT_FILTERS.assigned}
+          label={
+            <span className="truncate max-w-48">
+              <span className="text-text-muted">Assigned:</span>{" "}
+              <span className="text-text">{assignedLabel}</span>
+            </span>
+          }
         >
-          {STATUS_GROUPS.map((g) => (
-            <Link
-              key={g.value}
-              href={href({ status: g.value })}
-              aria-current={filters.status === g.value ? "true" : undefined}
-              className={segment(filters.status === g.value)}
-            >
-              {g.label}
-              <span className="ml-1.5 text-text-muted tabular-nums">{statusCounts[g.value]}</span>
-            </Link>
+          <MenuLink href={href({ assigned: "me" })} selected={assigned === "me"}>
+            Me
+          </MenuLink>
+          {others.map((r) => (
+            <MenuLink key={r.id} href={href({ assigned: r.id })} selected={assigned === r.id}>
+              {r.name}
+            </MenuLink>
           ))}
-        </div>
+          <MenuDivider />
+          <MenuLink href={href({ assigned: "all" })} selected={assigned === "all"}>
+            Everyone
+          </MenuLink>
+          <MenuLink href={href({ assigned: "unassigned" })} selected={assigned === "unassigned"}>
+            No one (unassigned)
+          </MenuLink>
+        </Menu>
 
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          Assigned to
-          <select
-            value={assignedValue}
-            onChange={(e) => router.push(href({ assigned: e.target.value }))}
-            className="bg-surface border border-border text-text px-2 py-1.5 outline-none focus:border-accent"
-          >
-            <option value="me">Me</option>
-            {reviewers
-              .filter((r) => r.id !== currentReviewerId)
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            <option value="unassigned">No one</option>
-            <option value="all">Anyone</option>
-          </select>
-        </label>
-
-        <div className="flex border border-border" role="group" aria-label="My decision">
-          {(
-            [
-              ["any", "All"],
-              ["todo", "Not yet decided by me"],
-              ["done", "Decided by me"],
-            ] as const
-          ).map(([v, label]) => (
-            <Link key={v} href={href({ mine: v })} className={segment(filters.mine === v)}>
+        <Menu
+          active={filters.mine !== DEFAULT_FILTERS.mine}
+          label={
+            <span>
+              <span className="text-text-muted">My decision:</span>{" "}
+              <span className="text-text">{mineLabel}</span>
+            </span>
+          }
+        >
+          {MINE_OPTIONS.map(([v, label]) => (
+            <MenuLink key={v} href={href({ mine: v })} selected={filters.mine === v}>
               {label}
-            </Link>
+            </MenuLink>
           ))}
-        </div>
+        </Menu>
 
-        <div className="relative flex-1 min-w-48">
+        <Menu
+          active={selectedLabels.length > 0}
+          panelClassName="w-56"
+          label={
+            <span>
+              <span className={selectedLabels.length ? "text-text" : ""}>Labels</span>
+              {selectedLabels.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 bg-accent text-bg text-[10px] tabular-nums">
+                  {selectedLabels.length}
+                </span>
+              )}
+            </span>
+          }
+        >
+          {labels.map((l) => (
+            <MenuCheckbox
+              key={l.submittableLabelId}
+              checked={selectedLabels.includes(l.submittableLabelId)}
+              onToggle={() => toggleLabel(l.submittableLabelId)}
+            >
+              {l.name}
+            </MenuCheckbox>
+          ))}
+          {selectedLabels.length > 0 && (
+            <>
+              <MenuDivider />
+              <MenuLink href={href({ labels: [] })}>Clear labels</MenuLink>
+            </>
+          )}
+        </Menu>
+
+        <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-56">
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search artist or title"
             aria-label="Search artist or title"
-            className="w-full bg-surface border border-border text-sm text-text px-3 py-1.5 outline-none focus:border-accent"
+            className="w-full bg-surface border border-border text-sm text-text px-3 py-1.5 outline-none focus:border-accent transition-colors"
           />
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Labels">
-        {labels.map((l) => {
-          const on = filters.labels.includes(l.submittableLabelId);
-          return (
+      {(filters.labels.length > 0 || !isDefaultFilters(filters)) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {filters.labels.map((id) => (
             <Link
-              key={l.submittableLabelId}
-              href={href({ labels: toggleLabel(l.submittableLabelId) })}
-              aria-pressed={on}
-              className={`text-xs px-2.5 py-1 border transition-colors ${
-                on
-                  ? "bg-accent text-bg border-accent"
-                  : "border-border text-text-muted hover:border-accent hover:text-text"
-              }`}
+              key={id}
+              href={href({ labels: filters.labels.filter((l) => l !== id) })}
+              scroll={false}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-accent text-bg hover:opacity-85"
+              aria-label={`Remove label filter ${labelName(id)}`}
             >
-              {l.name}
+              {labelName(id)} <span aria-hidden>×</span>
             </Link>
-          );
-        })}
-        {!isDefaultFilters(filters) && (
-          <Link
-            href={`/submissions${filtersToQuery(DEFAULT_FILTERS)}`}
-            className="text-xs text-text-muted underline ml-2 hover:text-text"
-          >
-            Reset filters
-          </Link>
-        )}
-      </div>
+          ))}
+          {!isDefaultFilters(filters) && (
+            <Link
+              href={`/submissions${filtersToQuery(DEFAULT_FILTERS)}`}
+              scroll={false}
+              className="text-text-muted underline hover:text-text ml-1"
+            >
+              Reset to my queue
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

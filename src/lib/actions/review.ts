@@ -28,6 +28,8 @@ import {
   removeLabel,
 } from "@/lib/submittable/writes";
 import { formatSyncSummary, lastSyncedAt, syncSubmittable } from "@/lib/sync/syncSubmittable";
+import { refreshOneSubmission } from "@/lib/sync/refreshOne";
+import { AUTO_SYNC_AFTER_MS } from "@/lib/sync/autoSync";
 
 export type ActionResult =
   | { ok: true; message?: string }
@@ -88,7 +90,7 @@ export async function setSubmissionLabel(
     prisma.submittableLabel.findUnique({ where: { submittableLabelId } }),
   ]);
   if (!submission) return { ok: false, error: "Submission not found." };
-  if (!label) return { ok: false, error: "Label not synced yet — press Sync first." };
+  if (!label) return { ok: false, error: "That label hasn't been loaded from Submittable yet." };
 
   try {
     if (on) await applyLabel(submission.submittableId, submittableLabelId);
@@ -97,8 +99,11 @@ export async function setSubmissionLabel(
     return { ok: false, error: `Label not changed. ${describeSubmittableError(err)}` };
   }
 
-  try {
-    await prisma.$transaction([
+  // Submittable has the change; now record it here. Retry once, then fall
+  // back to re-reading the submission from Submittable. If even that fails
+  // the next page open or sync reconciles it — nothing for the reviewer to do.
+  const saveLocally = () =>
+    prisma.$transaction([
       on
         ? prisma.submissionLabel.upsert({
             where: { submissionId_labelId: { submissionId, labelId: label.id } },
@@ -114,11 +119,15 @@ export async function setSubmissionLabel(
         },
       }),
     ]);
+  try {
+    await saveLocally();
   } catch {
-    return {
-      ok: false,
-      error: "Changed in Submittable, but not saved here. Press Sync to bring the app up to date.",
-    };
+    try {
+      await saveLocally();
+    } catch (err) {
+      console.error("label saved in Submittable but not locally", submissionId, err);
+      await refreshOneSubmission(submissionId).catch(() => {});
+    }
   }
   revalidatePath(`/submissions/${submissionId}`);
   return { ok: true };
@@ -249,7 +258,54 @@ export async function retryDecision(decisionId: string): Promise<ActionResult> {
   return result;
 }
 
-/** The Sync button. Metadata only; at most once a minute. */
+/**
+ * Opening a submission re-reads it from Submittable (status + labels).
+ * Returns whether anything changed, so the page knows to refresh.
+ * Failure is silent: the page already shows the last-known state.
+ */
+export async function refreshSubmission(submissionId: string): Promise<{ changed: boolean }> {
+  if (!(await isAuthenticated())) return { changed: false };
+  try {
+    const changed = await refreshOneSubmission(submissionId);
+    if (changed) {
+      revalidatePath(`/submissions/${submissionId}`);
+      revalidatePath("/submissions");
+    }
+    return { changed };
+  } catch (err) {
+    console.warn("refreshSubmission failed", submissionId, err);
+    return { changed: false };
+  }
+}
+
+/**
+ * Background sync, fired by the page when the last sync is stale. Does
+ * nothing if a sync finished recently (another tab, the daily Action, or
+ * the menu's Sync now).
+ */
+export async function autoSync(): Promise<
+  { ok: true; ran: boolean; changed: boolean } | { ok: false; error: string }
+> {
+  if (!(await isAuthenticated())) return { ok: false, error: "Not signed in." };
+  const last = await lastSyncedAt();
+  if (last && Date.now() - last.getTime() < AUTO_SYNC_AFTER_MS) {
+    return { ok: true, ran: false, changed: false };
+  }
+  try {
+    const summary = await syncSubmittable();
+    console.log(formatSyncSummary(summary));
+    const changed = summary.updated > 0 || summary.deleted.length > 0;
+    if (changed) {
+      revalidatePath("/submissions", "layout");
+      revalidatePath("/art-library");
+    }
+    return { ok: true, ran: true, changed };
+  } catch (err) {
+    return { ok: false, error: describeSubmittableError(err) };
+  }
+}
+
+/** "Sync now" in the reviewer menu. Metadata only; at most once a minute. */
 export async function syncNow(): Promise<ActionResult> {
   if (!(await isAuthenticated())) return NOT_SIGNED_IN;
   const reviewer = await getCurrentReviewer();

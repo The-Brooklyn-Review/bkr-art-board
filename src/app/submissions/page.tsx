@@ -8,13 +8,14 @@ import { STATUS_GROUPS, displayStatus, type StatusGroup } from "@/lib/submittabl
 import { lastSyncedAt } from "@/lib/sync/syncSubmittable";
 import { formatDateTime } from "@/lib/format";
 import { AppNav } from "@/components/review/AppNav";
-import { SyncButton } from "@/components/review/SyncButton";
+import { AppHeader, PageTitle } from "@/components/review/AppHeader";
+import { isSyncStale } from "@/lib/sync/autoSync";
 import { QueueFilterBar } from "@/components/review/QueueFilterBar";
 import { DecisionChip } from "@/components/review/DecisionChip";
 
 // Signs a thumbnail URL per row per request — must not be cached.
 export const dynamic = "force-dynamic";
-// The Sync button runs as a server action on this page.
+// The background sync and "Sync now" run as server actions on this page.
 export const maxDuration = 120;
 
 export default async function SubmissionsPage({
@@ -41,55 +42,53 @@ export default async function SubmissionsPage({
     where: { reviewerId: reviewer.id },
   });
 
+  const decidedByMe = rows.filter((r) =>
+    r.decisions.some((d) => d.reviewerId === reviewer.id),
+  ).length;
+
   return (
     <div className="min-h-screen bg-bg text-text">
-      <header className="border-b border-border px-4 sm:px-6 py-3 sticky top-0 bg-bg/95 backdrop-blur-sm z-10">
-        <AppNav current="review" reviewerName={reviewer.displayName}>
-          <SyncButton lastSynced={formatDateTime(synced)} />
-        </AppNav>
-      </header>
-
-      <main className="px-4 sm:px-6 py-6 max-w-[1400px]">
-        <div className="flex items-baseline justify-between gap-4 mb-5">
-          <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
-            {heading(filters, reviewer.displayName, reviewers)}
-          </h1>
-          <p className="text-sm text-text-muted tabular-nums text-right">
-            {rows.length} {rows.length === 1 ? "submission" : "submissions"}
-            {rows.length > 0 && (
-              <>
-                {" · "}
-                {
-                  rows.filter((r) => r.decisions.some((d) => d.reviewerId === reviewer.id)).length
-                }{" "}
-                decided by you
-              </>
-            )}
-          </p>
-        </div>
-
-        <QueueFilterBar
-          filters={filters}
-          statusCounts={statusCounts}
-          reviewers={reviewers.map((r) => ({ id: r.id, name: r.displayName }))}
-          labels={FILTER_LABELS.map((l) => ({
-            submittableLabelId: l.submittableLabelId,
-            name: l.name,
-          }))}
-          currentReviewerId={reviewer.id}
+      <AppHeader
+        nav={
+          <AppNav
+            current="review"
+            reviewerName={reviewer.displayName}
+            sync={{ lastSynced: formatDateTime(synced), stale: isSyncStale(synced) }}
+          />
+        }
+      >
+        <PageTitle
+          title={heading(filters, reviewers)}
+          meta={
+            <p className="tabular-nums">
+              {rows.length} {rows.length === 1 ? "submission" : "submissions"}
+              {rows.length > 0 && <> · {decidedByMe} decided by you</>}
+            </p>
+          }
         />
+        <div className="mt-3 sm:mt-4">
+          <QueueFilterBar
+            filters={filters}
+            statusCounts={statusCounts}
+            reviewers={reviewers.map((r) => ({ id: r.id, name: r.displayName }))}
+            labels={FILTER_LABELS.map((l) => ({
+              submittableLabelId: l.submittableLabelId,
+              name: l.name,
+            }))}
+            currentReviewerId={reviewer.id}
+          />
+        </div>
+      </AppHeader>
 
-        {reviewers.every((r) => !r.submittableUserId) && (
-          <p className="mt-6 border border-border px-4 py-3 text-sm text-text-muted">
-            Assignments haven&rsquo;t been pulled from Submittable yet. Press{" "}
-            <strong className="text-text">Sync</strong> to load who each submission is assigned to.
-          </p>
-        )}
-
+      <main className="px-4 sm:px-6 pb-10">
         {rows.length === 0 ? (
-          <EmptyState filters={filters} assignedToMeTotal={assignedToMeTotal} />
+          <EmptyState
+            filters={filters}
+            assignedToMeTotal={assignedToMeTotal}
+            statusCounts={statusCounts}
+          />
         ) : (
-          <ol className="mt-6 border-t border-border">
+          <ol>
             {rows.map((r, i) => (
               <li key={r.id} className="border-b border-border">
                 <Link
@@ -160,11 +159,7 @@ export default async function SubmissionsPage({
   );
 }
 
-function heading(
-  f: QueueFilters,
-  myName: string,
-  reviewers: { id: string; displayName: string }[],
-): string {
+function heading(f: QueueFilters, reviewers: { id: string; displayName: string }[]): string {
   const who =
     f.assigned === "me"
       ? "Assigned to you"
@@ -173,7 +168,6 @@ function heading(
         : f.assigned === "unassigned"
           ? "Unassigned"
           : `Assigned to ${reviewers.find((r) => r.id === f.assigned)?.displayName ?? "reviewer"}`;
-  void myName;
   return who;
 }
 
@@ -195,9 +189,11 @@ async function countByStatus(
 function EmptyState({
   filters,
   assignedToMeTotal,
+  statusCounts,
 }: {
   filters: QueueFilters;
   assignedToMeTotal: number;
+  statusCounts: Record<StatusGroup, number>;
 }) {
   if (filters.assigned === "me" && assignedToMeTotal === 0) {
     return (
@@ -209,8 +205,8 @@ function EmptyState({
             href={`/submissions${filtersToQuery(filters, { assigned: "all" })}`}
           >
             Show everyone&rsquo;s submissions
-          </Link>{" "}
-          or press Sync if assignments changed recently.
+          </Link>
+          . Assignments refresh from Submittable automatically.
         </p>
       </div>
     );
@@ -230,14 +226,37 @@ function EmptyState({
       </div>
     );
   }
+  // Matches exist under another status — point there rather than at a reset.
+  const elsewhere = STATUS_GROUPS.filter(
+    (g) => g.value !== "all" && g.value !== filters.status && statusCounts[g.value] > 0,
+  );
   return (
-    <div className="mt-10 text-sm text-text-muted">
-      <p className="text-text">No submissions match these filters.</p>
-      <Link className="underline hover:text-text" href="/submissions">
-        Reset filters
-      </Link>
+    <div className="mt-10 text-sm text-text-muted space-y-2">
+      <p className="text-text">
+        No {filters.status === "all" ? "" : `${displayGroup(filters.status)} `}submissions match
+        these filters.
+      </p>
+      {elsewhere.length > 0 && (
+        <p>
+          {elsewhere.map((g, i) => (
+            <span key={g.value}>
+              {i > 0 && " · "}
+              <Link
+                className="underline hover:text-text"
+                href={`/submissions${filtersToQuery(filters, { status: g.value })}`}
+              >
+                {statusCounts[g.value]} {g.label.toLowerCase()}
+              </Link>
+            </span>
+          ))}
+        </p>
+      )}
     </div>
   );
+}
+
+function displayGroup(g: StatusGroup): string {
+  return STATUS_GROUPS.find((x) => x.value === g)?.label.toLowerCase() ?? "";
 }
 
 /** Who else is on it — "Assigned to you" filtering makes your own name noise. */

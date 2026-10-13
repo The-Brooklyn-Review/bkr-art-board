@@ -12,6 +12,7 @@ import { ZoomableLightbox } from "./ZoomableLightbox";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 import Link from "next/link";
 import { AppNav } from "@/components/review/AppNav";
+import { AppHeader, PageTitle } from "@/components/review/AppHeader";
 
 // Matches the "30-60 visible cards feel manageable" density guidance —
 // also caps how many masonry items mount at once, which is the actual
@@ -66,6 +67,7 @@ export function ArtLibraryClient({
   initialAssetId,
   includePublished,
   reviewerName,
+  sync,
 }: {
   assets: LibraryAsset[];
   submissionCount: number;
@@ -73,6 +75,7 @@ export function ArtLibraryClient({
   /** Also showing work from already-accepted submissions (?published=1). */
   includePublished: boolean;
   reviewerName: string | null;
+  sync: { lastSynced: string; stale: boolean };
 }) {
   // Local, mutable copy of the server-fetched list. Publishing or hiding an
   // asset updates this in place (see removeAsset below) instead of
@@ -102,22 +105,6 @@ export function ArtLibraryClient({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate one-time mount read, see comment above
     if (window.innerWidth < 640) setDensity("large");
-  }, []);
-
-  // Hide the header on scroll-down, reveal it on scroll-up — same pattern
-  // as most mobile content apps. Without this, the header either eats
-  // permanent screen space (sticky) or filters/search become unreachable
-  // without scrolling all the way back to the top (non-sticky).
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const lastScrollY = useRef(0);
-  useEffect(() => {
-    function onScroll() {
-      const y = window.scrollY;
-      setHeaderHidden(y > lastScrollY.current && y > 250);
-      lastScrollY.current = y;
-    }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const fuse = useMemo(() => {
@@ -319,36 +306,42 @@ export function ArtLibraryClient({
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      {/*
-        Sticky at every breakpoint, but on mobile it also slides off-screen
-        on scroll-down and back on scroll-up (headerHidden) — filters/search
-        stay reachable without permanently eating screen space. sm:translate-y-0
-        below always wins at sm+, so desktop never hides.
-      */}
-      <header
-        className={`border-b border-border px-4 py-3 sm:px-6 sm:py-5 sticky top-0 bg-bg/95 backdrop-blur-sm z-10 transition-transform duration-200 sm:translate-y-0 ${
-          headerHidden ? "-translate-y-full" : "translate-y-0"
-        }`}
-      >
-        <div className="mb-3 sm:mb-4">
-          <AppNav current="gallery" reviewerName={reviewerName} />
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          {/* Title + count sit on one baseline-aligned line, wrapping to
-              their own stacked lines only if they don't fit (narrow
-              phones) — flex-wrap handles that without a breakpoint split. */}
-          <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
-            <h1 className="font-[family-name:var(--font-display)] text-xl sm:text-2xl text-text">
-              Visual Arts Library
-            </h1>
-            <p className="text-xs text-text-muted uppercase tracking-wide">
-              {submissionCount} submissions · {assets.length} artworks
-            </p>
-          </div>
-          {/* Always opposite the title, at every breakpoint — matches
-              where this control already sat on mobile. */}
-          <DensityToggle density={density} setDensity={setDensity} prominent />
-        </div>
+      <AppHeader nav={<AppNav current="gallery" reviewerName={reviewerName} sync={sync} />}>
+        <PageTitle
+          title="Visual Arts Library"
+          meta={
+            <>
+              <p>
+                {submissionCount} submissions · {assets.length} artworks
+              </p>
+              {/* Scope, not a filter: it widens what's loaded (a different
+                  server query), so it sits with the counts it changes
+                  rather than among the chips that narrow them. */}
+              <Link
+                href={includePublished ? "/art-library" : "/art-library?published=1"}
+                role="switch"
+                aria-checked={includePublished}
+                className="group flex items-center gap-2 normal-case tracking-normal text-text-muted hover:text-text"
+                title="Also show work from submissions already accepted in Submittable"
+              >
+                <span
+                  aria-hidden
+                  className={`relative w-6 h-3.5 rounded-full border transition-colors ${
+                    includePublished ? "bg-accent border-accent" : "border-text-muted/60"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-2 h-2 rounded-full transition-all ${
+                      includePublished ? "left-3 bg-bg" : "left-0.5 bg-text-muted"
+                    }`}
+                  />
+                </span>
+                Include published artists
+              </Link>
+            </>
+          }
+          aside={<DensityToggle density={density} setDensity={setDensity} prominent />}
+        />
 
         <div className="mt-3 space-y-2 sm:space-y-0 sm:mt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           {/* Label pills: horizontal scroll strip on mobile (was wrapping
@@ -366,20 +359,7 @@ export function ArtLibraryClient({
             >
               ⭐ Your stars
             </button>
-            {/* Server-side filter (a different query), so it's a link that
-                re-renders the page rather than client state. */}
-            <Link
-              href={includePublished ? "/art-library" : "/art-library?published=1"}
-              aria-pressed={includePublished}
-              className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
-                includePublished
-                  ? "bg-accent text-bg border-accent"
-                  : "border-border text-text-muted hover:border-accent hover:text-text"
-              }`}
-              title="Also show work from submissions already accepted in Submittable"
-            >
-              Include published artists
-            </Link>
+            <span aria-hidden className="shrink-0 w-px self-stretch bg-border mx-1" />
             {KNOWN_LABELS.map((label) => (
               <button
                 key={label}
@@ -426,9 +406,9 @@ export function ArtLibraryClient({
             Showing {filtered.length} of {assets.length} artworks
           </p>
         )}
-      </header>
+      </AppHeader>
 
-      <main className="px-6 py-6">
+      <main className="px-4 sm:px-6 py-6">
         {filtered.length === 0 ? (
           <p className="text-text-muted text-sm py-12 text-center">
             No artworks match the current filters.

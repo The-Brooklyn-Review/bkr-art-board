@@ -4,13 +4,17 @@ import { getCurrentReviewer } from "@/lib/reviewer/identity";
 import { parseFilters, filtersToQuery } from "@/lib/submissions/filters";
 import { getQueue, neighborsOutside } from "@/lib/submissions/queue";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
+import { cookies } from "next/headers";
 import { formatDateTime } from "@/lib/format";
+import { lastSyncedAt } from "@/lib/sync/syncSubmittable";
+import { isSyncStale } from "@/lib/sync/autoSync";
+import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
 import { SubmissionReviewClient } from "@/components/submissions/SubmissionReviewClient";
 
 // getSubmission() signs short-lived R2 URLs per request — caching this
 // route would serve expired image links.
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export default async function SubmissionReviewPage({
   params,
@@ -26,9 +30,11 @@ export default async function SubmissionReviewPage({
     redirect(`/reviewer?next=${encodeURIComponent(`/submissions/${id}${qs ? `?${qs}` : ""}`)}`);
   }
   const filters = parseFilters(sp);
-  const [submission, queue] = await Promise.all([
+  const [submission, queue, synced, jar] = await Promise.all([
     getSubmission(id),
     getQueue(filters, reviewer.id, false),
+    lastSyncedAt(),
+    cookies(),
   ]);
   if (!submission) notFound();
 
@@ -46,7 +52,8 @@ export default async function SubmissionReviewPage({
     <SubmissionReviewClient
       key={submission.id}
       submission={submission}
-      lastSynced={formatDateTime(submission.lastSyncedAt)}
+      sync={{ lastSynced: formatDateTime(synced), stale: isSyncStale(synced) }}
+      queueHidden={jar.get(QUEUE_HIDDEN_COOKIE)?.value === "1"}
       queue={queue.map((q) => ({
         id: q.id,
         artistName: q.artistName,

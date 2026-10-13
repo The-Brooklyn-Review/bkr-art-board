@@ -1,14 +1,17 @@
 import Link from "next/link";
+import { SyncStatus } from "@/components/review/SyncStatus";
+import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 
 /** Shared top bar for the gallery and the reviewer. */
 export function AppNav({
   current,
   reviewerName,
-  children,
+  sync,
 }: {
   current: "gallery" | "review";
   reviewerName?: string | null;
-  children?: React.ReactNode;
+  /** "Synced …" status; also syncs in the background when stale. */
+  sync?: { lastSynced: string; stale: boolean };
 }) {
   const tab = (href: string, label: string, active: boolean) => (
     <Link
@@ -22,21 +25,23 @@ export function AppNav({
     </Link>
   );
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
+    <div className="flex items-center justify-between gap-4 text-sm min-h-8">
       <nav className="flex items-center gap-5" aria-label="Sections">
         <span className="font-[family-name:var(--font-display)] text-base text-text mr-1">BKR</span>
         {tab("/submissions", "Review", current === "review")}
         {tab("/art-library", "Gallery", current === "gallery")}
       </nav>
-      <div className="flex items-center gap-4">
-        {children}
-        {reviewerName && (
-          <Link
-            href="/reviewer?switch=1"
-            className="text-xs text-text-muted hover:text-text"
-            title="Switch reviewer"
-          >
-            {reviewerName}
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        {sync && (
+          <span className="hidden sm:inline">
+            <SyncStatus lastSynced={sync.lastSynced} stale={sync.stale} />
+          </span>
+        )}
+        {reviewerName ? (
+          <ReviewerMenu name={reviewerName} />
+        ) : (
+          <Link href="/reviewer" className="text-xs text-text-muted hover:text-text underline">
+            Choose reviewer
           </Link>
         )}
       </div>

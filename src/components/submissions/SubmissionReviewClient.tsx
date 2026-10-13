@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import type { SubmissionDetail, ReviewAsset } from "@/lib/submissions/getSubmission";
+import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutations";
 import {
-  setPageType,
-  setAssetVisibility,
-  setSubmissionThumbnail,
-  type PageType,
-} from "@/lib/actions/mutations";
-import { postDecision, retryDecision, setSubmissionLabel } from "@/lib/actions/review";
+  postDecision,
+  refreshSubmission,
+  retryDecision,
+  setSubmissionLabel,
+} from "@/lib/actions/review";
 import {
   COMMENT_MAX,
   DECISIONS,
@@ -24,14 +24,10 @@ import {
 import { displayStatus } from "@/lib/submittable/statuses";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { DECISION_TONE, DecisionChip } from "@/components/review/DecisionChip";
-
-const PAGE_TYPES: { value: PageType; label: string }[] = [
-  { value: "artwork", label: "Artwork" },
-  { value: "cover_statement", label: "Cover / statement" },
-  { value: "cv_bio", label: "CV / bio" },
-  { value: "contact_sheet", label: "Contact sheet" },
-  { value: "unknown", label: "Unknown" },
-];
+import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
+import { ReviewerMenu } from "@/components/review/ReviewerMenu";
+import { SyncStatus } from "@/components/review/SyncStatus";
+import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
 
 interface QueueItem {
   id: string;
@@ -77,16 +73,18 @@ function isTyping(e: KeyboardEvent): boolean {
 
 export function SubmissionReviewClient({
   submission,
-  lastSynced,
+  sync,
   queue,
+  queueHidden: initialQueueHidden,
   position,
   query,
   reviewer,
   labelCatalog,
 }: {
   submission: SubmissionDetail;
-  lastSynced: string;
+  sync: { lastSynced: string; stale: boolean };
   queue: QueueItem[];
+  queueHidden: boolean;
   position: { index: number; total: number; prevId: string | null; nextId: string | null };
   query: string;
   reviewer: { id: string; name: string };
@@ -96,14 +94,35 @@ export function SubmissionReviewClient({
   const [pageIndex, setPageIndex] = useState(0);
   const asset: ReviewAsset | undefined = submission.assets[pageIndex];
   const commentRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLElement>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
+  const draft = useDecisionDraft(submission.id, reviewer.name, decision, setDecision);
   const [showHelp, setShowHelp] = useState(false);
+  const [queueHidden, setQueueHidden] = useState(initialQueueHidden);
   const queueRef = useRef<HTMLElement>(null);
 
   // Keep the current submission in view in the sidebar.
   useEffect(() => {
     queueRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "center" });
-  }, []);
+  }, [queueHidden]);
+
+  // Opening a submission re-reads it from Submittable, so a status or label
+  // changed there shows up here without anyone syncing. Delayed a beat so
+  // flicking through with J/K doesn't fire a request per keypress.
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      refreshSubmission(submission.id)
+        .then((r) => {
+          if (!cancelled && r.changed) router.refresh();
+        })
+        .catch(() => {});
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [submission.id, router]);
 
   const go = useCallback(
     (id: string | null) => {
@@ -112,8 +131,14 @@ export function SubmissionReviewClient({
     [router, query],
   );
 
-  // Keyboard: J/K submissions, ←/→ pages, 1–3 decision. Ignored while typing,
-  // except ⌘/Ctrl+Enter, which the form handles itself.
+  const toggleQueue = useCallback(() => {
+    const next = !queueHidden;
+    setQueueHidden(next);
+    document.cookie = `${QUEUE_HIDDEN_COOKIE}=${next ? 1 : 0}; path=/; max-age=31536000; samesite=lax`;
+  }, [queueHidden]);
+
+  // Keyboard: J/K submissions, ←/→ pages, 1–3 decision, [ list. Ignored
+  // while typing, except ⌘/Ctrl+Enter, which the form handles itself.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e)) return;
@@ -126,105 +151,116 @@ export function SubmissionReviewClient({
         setDecision(DECISIONS[Number(e.key) - 1].value);
         e.preventDefault();
         commentRef.current?.focus();
-      } else if (e.key === "?") setShowHelp((s) => !s);
+      } else if (e.key === "[") toggleQueue();
+      else if (e.key === "?") setShowHelp((s) => !s);
       else if (e.key === "Escape") setShowHelp(false);
       else return;
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, position.nextId, position.prevId, submission.assets.length]);
+  }, [go, position.nextId, position.prevId, submission.assets.length, toggleQueue]);
 
   const fileOf = submission.files.find((f) => f.id === asset?.submissionFileId);
   const listHref = `/submissions${query}`;
+  const mine = submission.decisions.find((d) => d.reviewerId === reviewer.id);
+  const navBtn =
+    "flex items-center gap-1 border border-border px-2 sm:px-2.5 py-1 text-text-muted hover:text-text hover:border-text-muted disabled:opacity-30 disabled:hover:border-border disabled:hover:text-text-muted transition-colors";
 
   return (
-    <div className="lg:h-screen bg-bg text-text flex flex-col lg:overflow-hidden">
+    <div className="lg:h-screen bg-bg text-text flex flex-col lg:overflow-hidden pb-24 lg:pb-0">
       {/* Top bar: where you are in the queue, and how to move through it */}
-      <header className="border-b border-border px-4 py-2.5 flex items-center gap-4 shrink-0 text-sm">
+      <header className="border-b border-border px-4 sm:px-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
+        <button
+          type="button"
+          onClick={toggleQueue}
+          className="hidden xl:flex items-center justify-center w-8 h-8 border border-border text-text-muted hover:text-text hover:border-text-muted transition-colors"
+          aria-pressed={!queueHidden}
+          aria-label={queueHidden ? "Show the review list" : "Hide the review list"}
+          title={`${queueHidden ? "Show" : "Hide"} the review list ( [ )`}
+        >
+          <SidebarIcon />
+        </button>
         <Link href={listHref} className="text-text-muted hover:text-text whitespace-nowrap">
-          ← Review list
+          ← <span className="hidden sm:inline">Review list</span>
+          <span className="sm:hidden">List</span>
         </Link>
-        <span className="text-text-muted tabular-nums whitespace-nowrap">
-          {position.index >= 0 ? `${position.index + 1} of ${position.total}` : "Not in this list"}
-        </span>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => go(position.prevId)}
             disabled={!position.prevId}
-            className="border border-border px-2.5 py-1 hover:border-accent disabled:opacity-30"
+            className={navBtn}
             title="Previous submission (K)"
+            aria-label="Previous submission"
           >
-            Previous
+            ‹<span className="hidden sm:inline">Previous</span>
           </button>
+          <span className="text-text-muted tabular-nums whitespace-nowrap text-xs sm:text-sm">
+            {position.index >= 0 ? `${position.index + 1} of ${position.total}` : "Not in list"}
+          </span>
           <button
             type="button"
             onClick={() => go(position.nextId)}
             disabled={!position.nextId}
-            className="border border-border px-2.5 py-1 hover:border-accent disabled:opacity-30"
+            className={navBtn}
             title="Next submission (J)"
+            aria-label="Next submission"
           >
-            Next
+            <span className="hidden sm:inline">Next</span>›
           </button>
         </div>
-        <div className="ml-auto flex items-center gap-4 text-xs text-text-muted">
-          <span className="hidden md:inline">Synced {lastSynced}</span>
-          <button
-            type="button"
-            onClick={() => setShowHelp((s) => !s)}
-            className="hover:text-text hidden md:inline"
-            aria-expanded={showHelp}
-          >
-            Shortcuts
-          </button>
-          <Link href="/reviewer?switch=1" className="hover:text-text" title="Switch reviewer">
-            {reviewer.name}
-          </Link>
+        <div className="ml-auto flex items-center gap-4">
+          <span className="hidden md:inline">
+            <SyncStatus lastSynced={sync.lastSynced} stale={sync.stale} />
+          </span>
+          <ReviewerMenu name={reviewer.name} onShortcuts={() => setShowHelp((s) => !s)} />
         </div>
       </header>
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
         {/* Queue */}
-        <aside
-          ref={queueRef}
-          className="w-60 border-r border-border overflow-y-auto shrink-0 hidden xl:block"
-          aria-label="Review list"
-        >
-          <ol>
-            {queue.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={`/submissions/${item.id}${query}`}
-                  aria-current={item.id === submission.id ? "page" : undefined}
-                  className={`flex items-start gap-2 px-3 py-2 border-b border-border text-sm ${
-                    item.id === submission.id
-                      ? "bg-surface text-text"
-                      : "text-text-muted hover:text-text hover:bg-surface/50"
-                  }`}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{item.artistName}</span>
-                    <span className="block text-xs text-text-muted truncate">
-                      {item.submissionTitle}
+        {!queueHidden && (
+          <aside
+            ref={queueRef}
+            className="w-60 border-r border-border overflow-y-auto shrink-0 hidden xl:block"
+            aria-label="Review list"
+          >
+            <ol>
+              {queue.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={`/submissions/${item.id}${query}`}
+                    aria-current={item.id === submission.id ? "page" : undefined}
+                    className={`flex items-start gap-2 px-3 py-2 border-b border-border text-sm ${
+                      item.id === submission.id
+                        ? "bg-surface text-text shadow-[inset_2px_0_0_var(--color-accent)]"
+                        : "text-text-muted hover:text-text hover:bg-bg-hover"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{item.artistName}</span>
+                      <span className="block text-xs text-text-muted truncate">
+                        {item.submissionTitle}
+                      </span>
                     </span>
-                  </span>
-                  {item.myDecision && (
-                    <span
-                      className={`shrink-0 text-[11px] border px-1 mt-0.5 ${DECISION_TONE[item.myDecision] ?? ""}`}
-                      title={`You: ${decisionLabel(item.myDecision)}`}
-                    >
-                      {item.myDecision === "tiered_reject"
-                        ? "Tiered"
-                        : decisionLabel(item.myDecision)}
-                      {item.myDecisionFailed && <span className="text-red-300"> !</span>}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </aside>
+                    {item.myDecision && (
+                      <span
+                        className={`shrink-0 text-[11px] border px-1 mt-0.5 ${DECISION_TONE[item.myDecision] ?? ""}`}
+                        title={`You: ${decisionLabel(item.myDecision)}`}
+                      >
+                        {item.myDecision === "tiered_reject"
+                          ? "Tiered"
+                          : decisionLabel(item.myDecision)}
+                        {item.myDecisionFailed && <span className="text-red-300"> !</span>}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </aside>
+        )}
 
         {/* Viewer */}
         <main className="flex-1 flex flex-col min-w-0 min-h-[60vh] lg:min-h-0">
@@ -257,6 +293,16 @@ export function SubmissionReviewClient({
                 No pages were rendered for this submission.
               </p>
             )}
+            {asset && !asset.visibleInArtLibrary && (
+              <span className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-bg/85 border border-border px-2 py-1 text-xs text-text-muted">
+                <EyeSlashIcon /> Hidden from the Gallery
+              </span>
+            )}
+            {asset && (
+              <div className="absolute top-3 right-3 z-20">
+                <PageMenu submission={submission} asset={asset} pageNumber={pageIndex + 1} />
+              </div>
+            )}
             {submission.assets.length > 1 && (
               <>
                 <button
@@ -287,7 +333,6 @@ export function SubmissionReviewClient({
               <span className="truncate">
                 Page {pageIndex + 1} of {submission.assets.length}
                 {fileOf?.originalFilename ? ` · ${fileOf.originalFilename}` : ""}
-                {asset && !asset.visibleInArtLibrary ? " · hidden from the gallery" : ""}
               </span>
               {fileOf && (
                 <a
@@ -306,7 +351,9 @@ export function SubmissionReviewClient({
                   type="button"
                   key={a.id}
                   onClick={() => setPageIndex(i)}
-                  aria-label={`Page ${i + 1}${a.visibleInArtLibrary ? "" : " (hidden)"}`}
+                  aria-label={`Page ${i + 1}${a.visibleInArtLibrary ? "" : " (hidden from the Gallery)"}${
+                    submission.thumbnailAssetId === a.id ? " (cover)" : ""
+                  }`}
                   aria-current={i === pageIndex ? "true" : undefined}
                   className={`shrink-0 w-14 h-14 border relative ${
                     i === pageIndex ? "border-accent" : "border-border opacity-60 hover:opacity-100"
@@ -318,11 +365,16 @@ export function SubmissionReviewClient({
                     alt=""
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${a.visibleInArtLibrary ? "" : "opacity-40"}`}
                   />
                   {!a.visibleInArtLibrary && (
+                    <span className="absolute top-0.5 right-0.5 bg-bg/85 p-0.5 text-text-muted">
+                      <EyeSlashIcon small />
+                    </span>
+                  )}
+                  {submission.thumbnailAssetId === a.id && (
                     <span className="absolute inset-x-0 bottom-0 bg-bg/85 text-[10px] text-text-muted">
-                      hidden
+                      Cover
                     </span>
                   )}
                 </button>
@@ -336,10 +388,11 @@ export function SubmissionReviewClient({
           <SubmissionHeader submission={submission} />
           <Statement text={submission.coverLetter} />
           <DecisionForm
-            submission={submission}
-            reviewer={reviewer}
+            formRef={formRef}
+            mine={mine}
             decision={decision}
             setDecision={setDecision}
+            draft={draft}
             commentRef={commentRef}
             nextId={position.nextId}
             onNext={() => go(position.nextId)}
@@ -352,29 +405,114 @@ export function SubmissionReviewClient({
             submission={submission}
             catalog={labelCatalog}
           />
-
-          <PageTools submission={submission} asset={asset} pageNumber={pageIndex + 1} />
           {(submission.legacy.notes.length > 0 ||
             submission.legacy.recommendation !== "unreviewed") && (
             <LegacyNotes legacy={submission.legacy} />
           )}
         </aside>
       </div>
+
+      <MobileDecisionBar
+        decision={decision}
+        setDecision={setDecision}
+        draft={draft}
+        mine={mine}
+        nextId={position.nextId}
+        onNext={() => go(position.nextId)}
+        onComment={() => {
+          formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => commentRef.current?.focus({ preventScroll: true }), 350);
+        }}
+      />
     </div>
   );
 }
+
+/**
+ * The decision being drafted: comment, signature, posting and its result.
+ * Shared by the panel form and the phone's bottom bar so either can post.
+ */
+function useDecisionDraft(
+  submissionId: string,
+  reviewerName: string,
+  decision: Decision | null,
+  setDecision: (d: Decision | null) => void,
+) {
+  const [comment, setComment] = useState("");
+  const [name, setName] = useState(reviewerName);
+  const [pending, start] = useTransition();
+  // Each result remembers the decision it was about, and only shows while
+  // that's still the draft — a stale error never lingers after you move on.
+  const [result, setResult] = useState<{
+    ok: boolean;
+    text: string;
+    for: Decision;
+    saved?: boolean;
+  } | null>(null);
+  const showResult =
+    !!result && (result.ok || result.saved ? decision === null : decision === result.for);
+
+  const submit = () => {
+    if (!decision || pending || !name.trim()) return;
+    const posting = decision;
+    start(async () => {
+      let r: Awaited<ReturnType<typeof postDecision>>;
+      try {
+        r = await postDecision(submissionId, { decision: posting, reviewerName: name, comment });
+      } catch {
+        // Unknown whether it was recorded or posted — don't invite a re-post.
+        setDecision(null);
+        setResult({
+          ok: false,
+          saved: true,
+          for: posting,
+          text: "Lost contact with the app while posting. Reload the page and check Decisions before posting again.",
+        });
+        return;
+      }
+      if (r.ok) {
+        // Clear the choice too: a second ⌘↵ must not post a duplicate note
+        // (notes can't be deleted from Submittable).
+        setDecision(null);
+        setComment("");
+        setResult({ ok: true, text: r.message ?? "Posted to Submittable.", for: posting });
+      } else if (r.saved) {
+        // Recorded, just not delivered: clear the form so it can't be
+        // posted twice; Retry under Decisions re-sends the same note.
+        setDecision(null);
+        setComment("");
+        setResult({ ok: false, text: r.error, for: posting, saved: true });
+      } else setResult({ ok: false, text: r.error, for: posting });
+    });
+  };
+
+  return {
+    comment,
+    setComment,
+    name,
+    setName,
+    pending,
+    result,
+    showResult,
+    submit,
+    canPost: !!decision && !!name.trim() && !pending,
+  };
+}
+type Draft = ReturnType<typeof useDecisionDraft>;
 
 function Section({
   title,
   children,
   aside,
+  sectionRef,
 }: {
   title: string;
   children: React.ReactNode;
   aside?: React.ReactNode;
+  sectionRef?: React.RefObject<HTMLElement | null>;
 }) {
   return (
-    <section className="px-5 py-4 border-b border-border">
+    <section ref={sectionRef} className="px-5 py-4 border-b border-border scroll-mt-4">
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="font-[family-name:var(--font-display)] text-base text-text">{title}</h2>
         {aside}
@@ -435,37 +573,26 @@ function SubmissionHeader({ submission }: { submission: SubmissionDetail }) {
 }
 
 function DecisionForm({
-  submission,
-  reviewer,
+  formRef,
+  mine,
   decision,
   setDecision,
+  draft,
   commentRef,
   nextId,
   onNext,
 }: {
-  submission: SubmissionDetail;
-  reviewer: { id: string; name: string };
+  formRef: React.RefObject<HTMLElement | null>;
+  mine: SubmissionDetail["decisions"][number] | undefined;
   decision: Decision | null;
   setDecision: (d: Decision | null) => void;
+  draft: Draft;
   commentRef: React.RefObject<HTMLTextAreaElement | null>;
   nextId: string | null;
   onNext: () => void;
 }) {
-  const [comment, setComment] = useState("");
-  const [name, setName] = useState(reviewer.name);
   const [editingName, setEditingName] = useState(false);
-  const [pending, start] = useTransition();
-  // Each result remembers the decision it was about, and only shows while
-  // that's still the draft — a stale error never lingers after you move on.
-  const [result, setResult] = useState<{
-    ok: boolean;
-    text: string;
-    for: Decision;
-    saved?: boolean;
-  } | null>(null);
-  const showResult =
-    result && (result.ok || result.saved ? decision === null : decision === result.for);
-  const mine = submission.decisions.find((d) => d.reviewerId === reviewer.id);
+  const { comment, setComment, name, setName, pending, result, showResult, submit } = draft;
 
   const preview = useMemo(
     () =>
@@ -475,42 +602,9 @@ function DecisionForm({
     [decision, name, comment],
   );
 
-  const submit = () => {
-    if (!decision || pending) return;
-    const posting = decision;
-    start(async () => {
-      let r: Awaited<ReturnType<typeof postDecision>>;
-      try {
-        r = await postDecision(submission.id, { decision: posting, reviewerName: name, comment });
-      } catch {
-        // Unknown whether it was recorded or posted — don't invite a re-post.
-        setDecision(null);
-        setResult({
-          ok: false,
-          saved: true,
-          for: posting,
-          text: "Lost contact with the app while posting. Reload the page and check Decisions before posting again.",
-        });
-        return;
-      }
-      if (r.ok) {
-        // Clear the choice too: a second ⌘↵ must not post a duplicate note
-        // (notes can't be deleted from Submittable).
-        setDecision(null);
-        setComment("");
-        setResult({ ok: true, text: r.message ?? "Posted to Submittable.", for: posting });
-      } else if (r.saved) {
-        // Recorded, just not delivered: clear the form so it can't be
-        // posted twice; Retry under Decisions re-sends the same note.
-        setDecision(null);
-        setComment("");
-        setResult({ ok: false, text: r.error, for: posting, saved: true });
-      } else setResult({ ok: false, text: r.error, for: posting });
-    });
-  };
-
   return (
     <Section
+      sectionRef={formRef}
       title={mine ? "Change your decision" : "Your decision"}
       aside={
         mine && (
@@ -540,7 +634,7 @@ function DecisionForm({
               }`}
             >
               {d.label}
-              <span className="block text-[11px] text-text-muted mt-0.5">{i + 1}</span>
+              <span className="hidden lg:block text-[11px] text-text-muted mt-0.5">{i + 1}</span>
             </button>
           );
         })}
@@ -601,20 +695,25 @@ function DecisionForm({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={!decision || !name.trim() || pending}
-        className="mt-3 w-full bg-accent text-bg px-4 py-2.5 font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
-      >
-        {pending
-          ? "Posting…"
-          : decision
-            ? `Post “${decisionLabel(decision)}” to Submittable`
-            : "Choose a decision"}
-      </button>
+      {decision ? (
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!draft.canPost}
+          className="mt-3 w-full bg-accent text-bg px-4 py-2.5 font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+        >
+          {pending ? "Posting…" : `Post “${decisionLabel(decision)}” to Submittable`}
+        </button>
+      ) : (
+        // Not a greyed-out primary button — nothing to press yet, so it
+        // reads as an instruction rather than a broken control.
+        <p className="mt-3 w-full border border-dashed border-border text-text-muted text-sm text-center px-4 py-2.5">
+          Choose Accept, Tiered Reject or Reject
+        </p>
+      )}
       <p className="mt-1.5 text-xs text-text-muted">
-        Notes can&rsquo;t be edited or deleted once posted. ⌘↵ to post.
+        Notes can&rsquo;t be edited or deleted once posted.
+        <span className="hidden lg:inline"> ⌘↵ to post.</span>
       </p>
 
       {showResult && result && (
@@ -622,7 +721,7 @@ function DecisionForm({
           {result.text}
           {result.ok && nextId && (
             <button type="button" onClick={onNext} className="ml-2 underline text-accent">
-              Next submission (J)
+              Next submission <span className="hidden lg:inline">(J)</span>
             </button>
           )}
         </div>
@@ -797,65 +896,6 @@ function Statement({ text }: { text: string | null }) {
   );
 }
 
-function PageTools({
-  submission,
-  asset,
-  pageNumber,
-}: {
-  submission: SubmissionDetail;
-  asset: ReviewAsset | undefined;
-  pageNumber: number;
-}) {
-  const [pending, start] = useTransition();
-  if (!asset) return null;
-  const isCover = submission.thumbnailAssetId === asset.id;
-  return (
-    <details className="border-b border-border group">
-      <summary className="px-5 py-4 cursor-pointer font-[family-name:var(--font-display)] text-base text-text-muted hover:text-text list-none flex justify-between">
-        Page {pageNumber} settings
-        <span className="text-xs font-[family-name:var(--font-ui)] group-open:hidden">
-          Gallery visibility, page type
-        </span>
-      </summary>
-      <div className="px-5 pb-4 space-y-3 text-sm">
-        <label className="flex items-center justify-between gap-3">
-          <span className="text-text-muted">Page type</span>
-          <select
-            value={asset.pageType}
-            disabled={pending}
-            onChange={(e) => start(() => setPageType(asset.id, e.target.value as PageType))}
-            className="bg-surface border border-border text-text px-2 py-1 outline-none focus:border-accent"
-          >
-            {PAGE_TYPES.map((pt) => (
-              <option key={pt.value} value={pt.value}>
-                {pt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center justify-between gap-3">
-          <span className="text-text-muted">Show in the gallery</span>
-          <input
-            type="checkbox"
-            checked={asset.visibleInArtLibrary}
-            disabled={pending}
-            onChange={(e) => start(() => setAssetVisibility(asset.id, e.target.checked))}
-            className="accent-[var(--color-accent)] w-4 h-4"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={pending || isCover}
-          onClick={() => start(() => setSubmissionThumbnail(submission.id, asset.id))}
-          className="text-accent underline disabled:no-underline disabled:text-text-muted"
-        >
-          {isCover ? "This page is the cover image" : "Use this page as the cover image"}
-        </button>
-      </div>
-    </details>
-  );
-}
-
 function LegacyNotes({ legacy }: { legacy: SubmissionDetail["legacy"] }) {
   return (
     <Section title="Earlier notes">
@@ -879,6 +919,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
     ["← / →", "Previous / next page"],
     ["1 · 2 · 3", "Accept · Tiered Reject · Reject"],
     ["⌘↵", "Post decision"],
+    ["[", "Hide or show the review list"],
     ["?", "Show or hide shortcuts"],
   ];
   return (
@@ -932,5 +973,181 @@ function DeliveryStatus({
       Submittable first — if it isn&rsquo;t there,
       {button("post it again")}
     </p>
+  );
+}
+
+/**
+ * Phones: decide without scrolling past the artwork. Pick a decision, then
+ * post straight from the bar or jump to the form to add a comment.
+ */
+function MobileDecisionBar({
+  decision,
+  setDecision,
+  draft,
+  mine,
+  nextId,
+  onNext,
+  onComment,
+}: {
+  decision: Decision | null;
+  setDecision: (d: Decision | null) => void;
+  draft: Draft;
+  mine: SubmissionDetail["decisions"][number] | undefined;
+  nextId: string | null;
+  onNext: () => void;
+  onComment: () => void;
+}) {
+  const short = (d: string) => (d === "tiered_reject" ? "Tiered" : decisionLabel(d));
+  return (
+    <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bg/95 backdrop-blur-sm border-t border-border px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      {draft.showResult && draft.result ? (
+        <p
+          role="status"
+          className={`text-xs mb-2 ${draft.result.ok ? "text-text" : "text-red-300"} line-clamp-2`}
+        >
+          {draft.result.text}
+        </p>
+      ) : mine && !decision ? (
+        <p className="text-xs mb-2 text-text-muted">
+          You decided {decisionLabel(mine.decision)} · {formatDate(mine.createdAt)}
+        </p>
+      ) : null}
+      {decision ? (
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setDecision(null)}
+            className={`flex items-center gap-1.5 border border-current bg-surface px-3 py-2.5 text-sm ${DECISION_TONE[decision]}`}
+            aria-label={`${decisionLabel(decision)} selected — tap to change`}
+          >
+            {short(decision)} <span aria-hidden>×</span>
+          </button>
+          <button
+            type="button"
+            onClick={onComment}
+            className="border border-border px-3 py-2.5 text-sm text-text-muted"
+          >
+            {draft.comment.trim() ? "Edit comment" : "Comment"}
+          </button>
+          <button
+            type="button"
+            onClick={draft.submit}
+            disabled={!draft.canPost}
+            className="flex-1 bg-accent text-bg px-3 py-2.5 text-sm font-medium disabled:opacity-40"
+          >
+            {draft.pending ? "Posting…" : "Post"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-1.5">
+          {DECISIONS.map((d) => (
+            <button
+              type="button"
+              key={d.value}
+              onClick={() => setDecision(d.value)}
+              className="flex-1 border border-border px-2 py-2.5 text-sm text-text"
+            >
+              {short(d.value)}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!nextId}
+            className="border border-border px-3 py-2.5 text-sm text-text-muted disabled:opacity-30"
+            aria-label="Next submission"
+          >
+            Next ›
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The artwork's own ⋯ menu: what this page does in the Gallery. */
+function PageMenu({
+  submission,
+  asset,
+  pageNumber,
+}: {
+  submission: SubmissionDetail;
+  asset: ReviewAsset;
+  pageNumber: number;
+}) {
+  const [pending, start] = useTransition();
+  const isCover = submission.thumbnailAssetId === asset.id;
+  return (
+    <Menu
+      align="right"
+      chevron={false}
+      panelClassName="w-72"
+      ariaLabel={`Page ${pageNumber} options`}
+      buttonClassName={`w-8 h-8 flex items-center justify-center bg-bg/80 border border-border text-text hover:border-accent transition-colors ${
+        pending ? "opacity-50" : ""
+      }`}
+      label={
+        <span aria-hidden className="text-base leading-none -mt-1.5">
+          ⋯
+        </span>
+      }
+    >
+      <MenuHeading>Page {pageNumber} in the Gallery</MenuHeading>
+      <MenuButton
+        disabled={pending}
+        onSelect={() =>
+          start(async () => {
+            await setAssetVisibility(asset.id, !asset.visibleInArtLibrary);
+          })
+        }
+      >
+        {asset.visibleInArtLibrary
+          ? "Hide this page from the Gallery"
+          : "Show this page in the Gallery"}
+      </MenuButton>
+      <MenuButton
+        disabled={pending || isCover}
+        onSelect={() =>
+          start(async () => {
+            await setSubmissionThumbnail(submission.id, asset.id);
+          })
+        }
+      >
+        {isCover ? "This page is the cover image" : "Use as the cover image"}
+      </MenuButton>
+    </Menu>
+  );
+}
+
+function EyeSlashIcon({ small = false }: { small?: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className={small ? "w-3 h-3" : "w-3.5 h-3.5"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+    >
+      <path d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4z" />
+      <circle cx="8" cy="8" r="1.8" />
+      <path d="M2.5 13.5l11-11" />
+    </svg>
+  );
+}
+
+function SidebarIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    >
+      <rect x="2" y="3" width="12" height="10" />
+      <path d="M6 3v10" />
+    </svg>
   );
 }
