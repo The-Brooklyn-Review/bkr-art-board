@@ -57,15 +57,23 @@ export function queueWhere(
       decisions: f.mine === "done" ? { some: { reviewerId } } : { none: { reviewerId } },
     });
   }
-  if (f.q) {
+  // Each word must appear in the artist or the title, so "anna cho" finds
+  // "Anna  Cho" (Submittable names often carry double spaces) and word
+  // order doesn't matter.
+  for (const term of searchTerms(f.q)) {
     and.push({
       OR: [
-        { artistName: { contains: f.q, mode: "insensitive" } },
-        { submissionTitle: { contains: f.q, mode: "insensitive" } },
+        { artistName: { contains: term, mode: "insensitive" } },
+        { submissionTitle: { contains: term, mode: "insensitive" } },
       ],
     });
   }
   return { AND: and };
+}
+
+/** The words of a search, whitespace collapsed. Pure — tested. */
+export function searchTerms(q: string): string[] {
+  return q.trim().split(/\s+/).filter(Boolean).slice(0, 8);
 }
 
 export interface QueueRow {
