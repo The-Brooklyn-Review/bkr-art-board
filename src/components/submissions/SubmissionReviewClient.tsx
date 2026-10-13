@@ -100,10 +100,15 @@ export function SubmissionReviewClient({
   const [showHelp, setShowHelp] = useState(false);
   const [queueHidden, setQueueHidden] = useState(initialQueueHidden);
   const queueRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   // Keep the current submission in view in the sidebar.
   useEffect(() => {
-    queueRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "center" });
+    revealWithin(
+      queueRef.current,
+      queueRef.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? null,
+      "center",
+    );
   }, [queueHidden]);
 
   // Opening a submission re-reads it from Submittable, so a status or label
@@ -123,6 +128,18 @@ export function SubmissionReviewClient({
       clearTimeout(t);
     };
   }, [submission.id, router]);
+
+  // Desktop: focus the comment without letting the browser scroll anything
+  // but the review panel (a plain focus() can shift the whole fixed layout).
+  // Phones: the page itself scrolls, so the browser's default is right.
+  const focusComment = useCallback(() => {
+    const el = commentRef.current;
+    if (!el) return;
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      el.focus({ preventScroll: true });
+      revealWithin(panelRef.current, el);
+    } else el.focus();
+  }, []);
 
   const go = useCallback(
     (id: string | null) => {
@@ -150,7 +167,7 @@ export function SubmissionReviewClient({
       else if (e.key === "1" || e.key === "2" || e.key === "3") {
         setDecision(DECISIONS[Number(e.key) - 1].value);
         e.preventDefault();
-        commentRef.current?.focus();
+        focusComment();
       } else if (e.key === "[") toggleQueue();
       else if (e.key === "?") setShowHelp((s) => !s);
       else if (e.key === "Escape") setShowHelp(false);
@@ -158,7 +175,7 @@ export function SubmissionReviewClient({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, position.nextId, position.prevId, submission.assets.length, toggleQueue]);
+  }, [go, position.nextId, position.prevId, submission.assets.length, toggleQueue, focusComment]);
 
   const fileOf = submission.files.find((f) => f.id === asset?.submissionFileId);
   const listHref = `/submissions${query}`;
@@ -167,7 +184,11 @@ export function SubmissionReviewClient({
     "flex items-center gap-1 border border-border px-2 sm:px-2.5 py-1 text-text-muted hover:text-text hover:border-text-muted disabled:opacity-30 disabled:hover:border-border disabled:hover:text-text-muted transition-colors";
 
   return (
-    <div className="lg:h-screen bg-bg text-text flex flex-col lg:overflow-hidden pb-24 lg:pb-0">
+    // Desktop: pinned to the viewport and clipped (overflow-clip, not
+    // overflow-hidden — a hidden box can still be scrolled by focus() or
+    // scrollIntoView, which slid the whole layout up past its end). Only the
+    // three columns scroll, each on its own.
+    <div className="bg-bg text-text flex flex-col pb-24 lg:pb-0 lg:fixed lg:inset-0 lg:overflow-clip">
       {/* Top bar: where you are in the queue, and how to move through it */}
       <header className="border-b border-border px-4 sm:px-6 py-2.5 flex items-center gap-3 sm:gap-4 shrink-0 text-sm">
         <button
@@ -218,12 +239,12 @@ export function SubmissionReviewClient({
       </header>
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
 
-      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 lg:overflow-clip">
         {/* Queue */}
         {!queueHidden && (
           <aside
             ref={queueRef}
-            className="w-60 border-r border-border overflow-y-auto shrink-0 hidden xl:block"
+            className="w-60 border-r border-border overflow-y-auto overscroll-contain shrink-0 hidden xl:block"
             aria-label="Review list"
           >
             <ol>
@@ -384,7 +405,10 @@ export function SubmissionReviewClient({
         </main>
 
         {/* Review panel */}
-        <aside className="lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border lg:overflow-y-auto shrink-0">
+        <aside
+          ref={panelRef}
+          className="lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border lg:overflow-y-auto lg:overscroll-contain shrink-0"
+        >
           <SubmissionHeader submission={submission} />
           <Statement text={submission.coverLetter} />
           <DecisionForm
@@ -394,6 +418,7 @@ export function SubmissionReviewClient({
             setDecision={setDecision}
             draft={draft}
             commentRef={commentRef}
+            focusComment={focusComment}
             nextId={position.nextId}
             onNext={() => go(position.nextId)}
           />
@@ -579,6 +604,7 @@ function DecisionForm({
   setDecision,
   draft,
   commentRef,
+  focusComment,
   nextId,
   onNext,
 }: {
@@ -588,6 +614,7 @@ function DecisionForm({
   setDecision: (d: Decision | null) => void;
   draft: Draft;
   commentRef: React.RefObject<HTMLTextAreaElement | null>;
+  focusComment: () => void;
   nextId: string | null;
   onNext: () => void;
 }) {
@@ -625,7 +652,7 @@ function DecisionForm({
               aria-checked={on}
               onClick={() => {
                 setDecision(d.value);
-                commentRef.current?.focus();
+                focusComment();
               }}
               className={`border px-2 py-2.5 text-sm transition-colors ${
                 on
@@ -1150,4 +1177,22 @@ function SidebarIcon() {
       <path d="M6 3v10" />
     </svg>
   );
+}
+
+/**
+ * Scrolls `el` into view inside `container` only. Element.scrollIntoView
+ * also scrolls every ancestor — including clipped ones and the page — which
+ * is how the layout used to slide up out of the viewport.
+ */
+function revealWithin(
+  container: HTMLElement | null,
+  el: HTMLElement | null,
+  align: "center" | "nearest" = "nearest",
+) {
+  if (!container || !el) return;
+  const c = container.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  if (align === "center") container.scrollTop += r.top - c.top - (c.height - r.height) / 2;
+  else if (r.top < c.top) container.scrollTop += r.top - c.top - 16;
+  else if (r.bottom > c.bottom) container.scrollTop += r.bottom - c.bottom + 16;
 }
