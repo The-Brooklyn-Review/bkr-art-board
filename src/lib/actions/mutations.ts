@@ -205,3 +205,48 @@ export async function markAssetPublished(assetId: string) {
     throw error;
   }
 }
+
+const SUBMISSION_TITLE_MAX = 300;
+
+/**
+ * Corrects a submission's title — e.g. a generic "Visual Art Submission"
+ * to the names of the pieces. Local only, like everything here: Submittable
+ * keeps its own title. The importer keeps an edited title on re-import (it
+ * looks for this audit row; see scripts/process-submission.ts).
+ */
+export async function setSubmissionTitle(
+  submissionId: string,
+  title: string,
+): Promise<{ ok: true; title: string } | { ok: false; error: string }> {
+  await requireAuth();
+  const clean = title.replace(/\s+/g, " ").trim();
+  if (!clean) return { ok: false, error: "A title can't be empty." };
+  if (clean.length > SUBMISSION_TITLE_MAX) {
+    return { ok: false, error: `Keep it under ${SUBMISSION_TITLE_MAX} characters.` };
+  }
+  const submission = await prisma.submittableSubmission.findUniqueOrThrow({
+    where: { id: submissionId },
+    select: { submissionTitle: true },
+  });
+  if (clean === submission.submissionTitle) return { ok: true, title: clean };
+
+  await prisma.$transaction([
+    prisma.submittableSubmission.update({
+      where: { id: submissionId },
+      data: { submissionTitle: clean },
+    }),
+    prisma.reviewAction.create({
+      data: {
+        submissionId,
+        actionType: "title_changed",
+        previousValue: { submissionTitle: submission.submissionTitle },
+        newValue: { submissionTitle: clean },
+      },
+    }),
+  ]);
+
+  revalidatePath("/art-library");
+  revalidatePath("/submissions");
+  revalidatePath(`/submissions/${submissionId}`);
+  return { ok: true, title: clean };
+}

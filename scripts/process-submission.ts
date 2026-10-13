@@ -491,13 +491,20 @@ async function processSubmission(submissionId: string): Promise<SubmissionResult
         .map((f) => f.value)
         .join("\n\n") || null;
 
+    // A title corrected in the reviewer (setSubmissionTitle) survives a
+    // re-import; Submittable's own title only fills it until then.
+    const titleEdited =
+      (await prisma.reviewAction.count({
+        where: { submissionId: submission.id, actionType: "title_changed" },
+      })) > 0;
+
     submission = await prisma.submittableSubmission.update({
       where: { id: submission.id },
       data: {
         officialStatus: summary.submissionStatus,
         artistName,
         artistEmail: summary.submitterEmail,
-        submissionTitle: summary.submissionTitle,
+        ...(titleEdited ? {} : { submissionTitle: summary.submissionTitle }),
         coverLetter,
         projectName: summary.projectTitle,
         projectId: summary.projectId,

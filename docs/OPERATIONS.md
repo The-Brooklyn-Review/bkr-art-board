@@ -24,6 +24,8 @@ All scripts read `.env.local` (via `dotenv`) and are run with `npx tsx scripts/<
 
 Re-running the importer for a `SubmissionFile` that already has assets replaces them: R2 uploads happen first, then a single Postgres transaction deletes the old `ArtAsset` rows for that file and creates the new ones. **This is not atomic across R2 and Postgres** — if the process crashes after uploading to R2 but before the transaction commits, the new objects are orphaned in R2 (no data loss, but some storage waste; nothing in the app currently sweeps orphaned R2 objects). If the transaction itself fails, the old `ArtAsset` rows are untouched (real Postgres transactions roll back) and the file is marked `processingStatus: "error"` for retry.
 
+A title corrected in the reviewer (click the title under the artist's name) is kept: reprocessing only takes Submittable's title for submissions whose title was never edited, which it knows from the `title_changed` row in `review_actions`.
+
 If the submission's curator-selected thumbnail (`SubmittableSubmission.thumbnailAssetId`) pointed at one of the replaced assets, reprocessing tries to preserve the selection by re-pointing it to the new asset at the same page position. If no asset exists at that position anymore (e.g. the file now has fewer pages), the thumbnail reference is cleared and a warning is logged — the selection is not silently lost, but it does need to be re-picked by a curator.
 
 ## Scheduled workflows

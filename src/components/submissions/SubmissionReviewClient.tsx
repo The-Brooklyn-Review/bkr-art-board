@@ -6,7 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import type { SubmissionDetail, ReviewAsset } from "@/lib/submissions/getSubmission";
-import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutations";
+import {
+  setAssetVisibility,
+  setSubmissionThumbnail,
+  setSubmissionTitle,
+} from "@/lib/actions/mutations";
 import {
   confirmDecisionPosted,
   postDecision,
@@ -617,11 +621,7 @@ function SubmissionHeader({
           <h1 className="font-[family-name:var(--font-display)] text-[1.75rem] leading-tight">
             {submission.artistName ?? "Unknown artist"}
           </h1>
-          {/* Titles of works in italics — the editorial convention, and what
-              separates the work from the person at a glance. */}
-          <p className="mt-1 font-[family-name:var(--font-display)] italic text-lg leading-snug text-text/85">
-            {submission.submissionTitle || "Untitled"}
-          </p>
+          <EditableTitle submissionId={submission.id} title={submission.submissionTitle} />
         </div>
         {submission.submittableUrl && (
           <a
@@ -1357,6 +1357,112 @@ function PageMenu({
           role="alert"
           className="absolute right-0 top-10 w-64 bg-bg/90 border border-red-500/60 px-2 py-1 text-xs text-red-300"
         >
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The submission's title, correctable in place: Submittable's title is
+ * often generic ("Visual Art Submission") when the pieces have names.
+ * Click to edit; Enter or clicking away saves, Escape cancels. Saved
+ * locally only (see setSubmissionTitle).
+ */
+function EditableTitle({ submissionId, title }: { submissionId: string; title: string | null }) {
+  const [shown, setShown] = useState(title);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const font = "font-[family-name:var(--font-display)] italic text-lg leading-snug";
+
+  // Grow with the text (titles listing several pieces run long).
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  useEffect(() => {
+    if (!editing) return;
+    fit();
+    ref.current?.focus();
+    ref.current?.select();
+  }, [editing]);
+
+  const save = () => {
+    setEditing(false);
+    const next = draft.replace(/\s+/g, " ").trim();
+    if (!next || next === shown) return;
+    const before = shown;
+    setShown(next);
+    setError(null);
+    start(async () => {
+      const r = await setSubmissionTitle(submissionId, next).catch(() => UNREACHABLE);
+      if (r.ok) {
+        if ("title" in r) setShown(r.title);
+      } else {
+        setShown(before);
+        setError(r.error);
+      }
+    });
+  };
+
+  if (editing) {
+    return (
+      <textarea
+        ref={ref}
+        value={draft}
+        rows={1}
+        maxLength={300}
+        aria-label="Submission title"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          fit();
+        }}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setEditing(false);
+          }
+        }}
+        className={`mt-1 block w-full resize-none overflow-hidden bg-surface border border-accent px-1.5 -mx-1.5 py-0.5 outline-none text-text ${font}`}
+      />
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(shown ?? "");
+          setEditing(true);
+        }}
+        title="Edit title"
+        className={`group mt-1 block text-left text-text/85 hover:text-text ${font} ${
+          pending ? "opacity-60" : ""
+        }`}
+      >
+        {/* Titles of works in italics — the editorial convention, and what
+            separates the work from the person at a glance. */}
+        {shown || "Untitled"}
+        <span
+          aria-hidden
+          className="not-italic ml-2 text-sm text-text-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+        >
+          ✎
+        </span>
+        <span className="sr-only"> (edit title)</span>
+      </button>
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-red-300">
           {error}
         </p>
       )}
