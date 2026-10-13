@@ -37,13 +37,9 @@ export function AppNav({
             <SyncStatus lastSynced={sync.lastSynced} stale={sync.stale} />
           </span>
         )}
-        {reviewerName ? (
-          <ReviewerMenu name={reviewerName} />
-        ) : (
-          <Link href="/reviewer" className="text-xs text-text-muted hover:text-text underline">
-            Choose reviewer
-          </Link>
-        )}
+        {/* No prompt to pick a name otherwise: only reviewing needs one, and
+            the Review tab asks for it. */}
+        {reviewerName && <ReviewerMenu name={reviewerName} />}
       </div>
     </div>
   );
