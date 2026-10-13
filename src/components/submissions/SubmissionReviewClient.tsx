@@ -453,7 +453,11 @@ export function SubmissionReviewClient({
           ref={panelRef}
           className="lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border lg:overflow-y-auto lg:overscroll-contain shrink-0"
         >
-          <SubmissionHeader submission={submission} reviewerId={reviewer.id} />
+          <SubmissionHeader
+            submission={submission}
+            reviewerId={reviewer.id}
+            currentAssetId={asset?.id}
+          />
           <Statement text={submission.coverLetter} />
           <DecisionForm
             formRef={formRef}
@@ -601,9 +605,12 @@ function Section({
 function SubmissionHeader({
   submission,
   reviewerId,
+  currentAssetId,
 }: {
   submission: SubmissionDetail;
   reviewerId: string;
+  /** The page on screen: a share leads with it. */
+  currentAssetId?: string;
 }) {
   const me = submission.reviewers.some((r) => r.id === reviewerId);
   const others = submission.reviewers.filter((r) => r.id !== reviewerId).map((r) => r.name);
@@ -626,7 +633,7 @@ function SubmissionHeader({
           <EditableTitle submissionId={submission.id} title={submission.submissionTitle} />
         </div>
         <div className="shrink-0 mt-1 flex items-center gap-2">
-          <ShareSubmissionButton submission={submission} />
+          <ShareSubmissionButton submission={submission} currentAssetId={currentAssetId} />
           {submission.submittableUrl && (
             <a
               href={submission.submittableUrl}
@@ -1496,7 +1503,13 @@ function EditableTitle({ submissionId, title }: { submissionId: string; title: s
 }
 
 /** Copies a public link to the submission's visible pieces (/share/s/…). */
-function ShareSubmissionButton({ submission }: { submission: SubmissionDetail }) {
+function ShareSubmissionButton({
+  submission,
+  currentAssetId,
+}: {
+  submission: SubmissionDetail;
+  currentAssetId?: string;
+}) {
   const share = useCopyLink();
   const key = `submission:${submission.id}`;
   if (!submission.assets.some((a) => a.shareable)) return null;
@@ -1504,7 +1517,12 @@ function ShareSubmissionButton({ submission }: { submission: SubmissionDetail })
     <button
       type="button"
       onClick={() =>
-        share.copy(key, async () => `/share/s/${await createSubmissionShareLink(submission.id)}`)
+        // The page on screen leads the link (its preview image, where it
+        // opens); ignored server-side if that page isn't shareable.
+        share.copy(
+          key,
+          async () => `/share/s/${await createSubmissionShareLink(submission.id, currentAssetId)}`,
+        )
       }
       disabled={share.copying(key)}
       title="Copy a public link to this submission's pieces (artist and titles only)"

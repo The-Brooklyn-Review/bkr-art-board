@@ -96,7 +96,14 @@ describe("resolveSubmissionShareToken", () => {
   const link = (overrides: Record<string, unknown> = {}, assets = [piece]) => ({
     revokedAt: null,
     expiresAt: new Date(Date.now() + 60_000),
-    submission: { id: "sub-1", artistName: "Jane Doe", submissionTitle: "Pieces", assets },
+    previewAssetId: null,
+    submission: {
+      id: "sub-1",
+      artistName: "Jane Doe",
+      submissionTitle: "Pieces",
+      thumbnailAssetId: null,
+      assets,
+    },
     ...overrides,
   });
 
@@ -107,6 +114,7 @@ describe("resolveSubmissionShareToken", () => {
       artistName: "Jane Doe",
       submissionTitle: "Pieces",
       assets: [piece],
+      featuredAssetId: null,
     });
     // Hidden and do-not-use pages are filtered in the query itself.
     expect(mockPrisma.sharedSubmissionLink.findUnique).toHaveBeenCalledWith(
@@ -119,7 +127,7 @@ describe("resolveSubmissionShareToken", () => {
     });
     // Nothing beyond pieces, name and title is even selected.
     expect(Object.keys(query.include.submission.select).sort()).toEqual(
-      ["artistName", "assets", "id", "submissionTitle"].sort(),
+      ["artistName", "assets", "id", "submissionTitle", "thumbnailAssetId"].sort(),
     );
   });
 
@@ -132,6 +140,20 @@ describe("resolveSubmissionShareToken", () => {
       link({ expiresAt: new Date(Date.now() - 1000) }),
     );
     await expect(resolveSubmissionShareToken("x")).resolves.toBeNull();
+  });
+
+  it("leads with the piece shared from, else the cover — only if still shown", async () => {
+    const other = { ...piece, id: "a2" };
+    const resolveWith = (previewAssetId: string | null, thumbnailAssetId: string | null) => {
+      const l = link({ previewAssetId }, [piece, other]);
+      l.submission.thumbnailAssetId = thumbnailAssetId as never;
+      mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(l);
+      return resolveSubmissionShareToken("x").then((r) => r?.featuredAssetId);
+    };
+    await expect(resolveWith("a2", "a1")).resolves.toBe("a2");
+    await expect(resolveWith(null, "a1")).resolves.toBe("a1");
+    await expect(resolveWith("hidden", "a2")).resolves.toBe("a2");
+    await expect(resolveWith("hidden", "also-hidden")).resolves.toBeNull();
   });
 
   it("returns null once no piece is left to show", async () => {

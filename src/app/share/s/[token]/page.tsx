@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { openInAppUrl, resolveSubmissionShareToken } from "@/lib/sharePreview";
 import { SubmissionShareViewer } from "./SubmissionShareViewer";
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@/lib/processing/previewCard";
 
 // A whole submission's pieces, shared publicly — see
 // resolveSubmissionShareToken. Re-validated on every request, like the
@@ -22,12 +23,20 @@ export async function generateMetadata({
   const description = `${resolved.artistName ? `By ${resolved.artistName} · ` : ""}${count} ${
     count === 1 ? "piece" : "pieces"
   } — shared from The Brooklyn Review Art Board`;
-  const imageUrl = `/share/s/${token}/${resolved.assets[0].id}`;
+  // A purpose-made JPEG card of the first pieces (./og), size declared —
+  // see the single-artwork page.
+  const image = {
+    url: `/share/s/${token}/og`,
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
+    type: "image/jpeg",
+    alt: title,
+  };
   return {
     title,
     description,
-    openGraph: { title, description, images: [imageUrl], type: "website" },
-    twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
+    openGraph: { title, description, images: [image], type: "website" },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
 
@@ -39,7 +48,11 @@ export default async function SubmissionSharePage({
   const { token } = await params;
   const resolved = await resolveSubmissionShareToken(token);
   if (!resolved) notFound();
-  const openUrl = await openInAppUrl(resolved.submissionId, resolved.assets[0].id);
+  const startIndex = Math.max(
+    0,
+    resolved.assets.findIndex((a) => a.id === resolved.featuredAssetId),
+  );
+  const openUrl = await openInAppUrl(resolved.submissionId, resolved.assets[startIndex].id);
 
   return (
     <main className="min-h-screen bg-bg">
@@ -52,6 +65,7 @@ export default async function SubmissionSharePage({
         artistName={resolved.artistName}
         submissionTitle={resolved.submissionTitle}
         openUrl={openUrl}
+        startIndex={startIndex}
       />
     </main>
   );

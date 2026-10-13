@@ -46,17 +46,28 @@ export async function createShareLink(assetId: string): Promise<string> {
 /**
  * The same for a whole submission (/share/s/<token>): one link per
  * submission, sharing again replaces it. Refused when no page would show.
+ * `previewAssetId` — the piece on screen — leads: it's the link-preview
+ * image and where the page opens (ignored unless it's a shareable page of
+ * this submission).
  */
-export async function createSubmissionShareLink(submissionId: string): Promise<string> {
+export async function createSubmissionShareLink(
+  submissionId: string,
+  previewAssetId?: string,
+): Promise<string> {
   await requireAuth();
-  const shareable = await prisma.artAsset.count({ where: { submissionId, ...SHAREABLE_ASSET } });
-  if (shareable === 0) throw new Error("Nothing in this submission can be shared.");
+  const shareable = await prisma.artAsset.findMany({
+    where: { submissionId, ...SHAREABLE_ASSET },
+    select: { id: true },
+  });
+  if (shareable.length === 0) throw new Error("Nothing in this submission can be shared.");
+  const preview = shareable.some((a) => a.id === previewAssetId) ? previewAssetId! : null;
 
   const token = generateShareToken();
   const data = {
     tokenHash: hashShareToken(token),
     expiresAt: new Date(Date.now() + SHARE_LINK_TTL_MS),
     revokedAt: null,
+    previewAssetId: preview,
   };
   await prisma.sharedSubmissionLink.upsert({
     where: { submissionId },

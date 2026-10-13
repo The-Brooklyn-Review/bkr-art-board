@@ -52,7 +52,8 @@ export function LightboxFooter({
   const shareSubmission = () =>
     share.copy(
       submissionKey,
-      async () => `/share/s/${await createSubmissionShareLink(asset.submissionId)}`,
+      // The artwork on screen leads the link (its preview image).
+      async () => `/share/s/${await createSubmissionShareLink(asset.submissionId, asset.id)}`,
     );
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
 

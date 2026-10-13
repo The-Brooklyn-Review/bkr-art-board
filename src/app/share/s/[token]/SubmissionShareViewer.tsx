@@ -15,13 +15,16 @@ export function SubmissionShareViewer({
   artistName,
   submissionTitle,
   openUrl,
+  startIndex,
 }: {
   pieces: { src: string; width: number | null; height: number | null }[];
   artistName: string | null;
   submissionTitle: string | null;
   openUrl: string;
+  /** The piece that was on screen when it was shared. */
+  startIndex: number;
 }) {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(startIndex);
   const several = pieces.length > 1;
   const alt = submissionTitle || "Shared artwork";
 

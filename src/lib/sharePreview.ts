@@ -79,6 +79,12 @@ export interface ResolvedSubmissionShare {
     width: number | null;
     height: number | null;
   }[];
+  /**
+   * The piece to lead with — preview image, and where the page opens: the
+   * one on screen when it was shared, else the submission's cover; null
+   * if neither is (still) shareable.
+   */
+  featuredAssetId: string | null;
 }
 
 /**
@@ -99,6 +105,7 @@ export async function resolveSubmissionShareToken(
           id: true,
           artistName: true,
           submissionTitle: true,
+          thumbnailAssetId: true,
           assets: {
             where: SHAREABLE_ASSET,
             select: { id: true, storagePathThumbnail: true, width: true, height: true },
@@ -109,12 +116,15 @@ export async function resolveSubmissionShareToken(
     },
   });
   if (!link || link.revokedAt || link.expiresAt < new Date()) return null;
-  if (link.submission.assets.length === 0) return null;
+  const { assets } = link.submission;
+  if (assets.length === 0) return null;
+  const shown = (id: string | null) => (id && assets.some((a) => a.id === id) ? id : null);
   return {
     submissionId: link.submission.id,
     artistName: link.submission.artistName,
     submissionTitle: link.submission.submissionTitle,
-    assets: link.submission.assets,
+    assets,
+    featuredAssetId: shown(link.previewAssetId) ?? shown(link.submission.thumbnailAssetId),
   };
 }
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { openInAppUrl, resolveShareToken } from "@/lib/sharePreview";
 import { SharePreviewViewer } from "./SharePreviewViewer";
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@/lib/processing/previewCard";
 
 // Re-validated on every request — a link revoked (replaced) or expired a
 // second ago must stop resolving immediately, not whenever a cache expires.
@@ -26,13 +27,22 @@ export async function generateMetadata({
   const description = resolved.artistName
     ? `By ${resolved.artistName} — shared from The Brooklyn Review Art Board`
     : "Shared from The Brooklyn Review Art Board";
-  const imageUrl = `/share/${token}/image`;
+  // A purpose-made JPEG card (./og), with its size declared: some
+  // previewers (Facebook, WhatsApp) skip an image whose size they'd have to
+  // fetch it to learn, and not all of them show WebP.
+  const image = {
+    url: `/share/${token}/og`,
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
+    type: "image/jpeg",
+    alt: title,
+  };
 
   return {
     title,
     description,
-    openGraph: { title, description, images: [imageUrl], type: "website" },
-    twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
+    openGraph: { title, description, images: [image], type: "website" },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
 
