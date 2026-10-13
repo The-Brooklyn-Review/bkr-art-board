@@ -8,6 +8,23 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Never indexed, archived or used for AI training — on every response,
+  // not just HTML: the noindex <meta> (layout.tsx) can't cover images and
+  // API responses, and robots.txt only asks crawlers not to fetch. Link
+  // previews (Slack, iMessage) still work; this only affects indexing.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

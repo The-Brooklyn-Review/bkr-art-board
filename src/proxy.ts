@@ -11,7 +11,10 @@ import { AUTH_COOKIE_NAME, expectedAuthCookieValue } from "@/lib/auth";
 // redirect to /login instead of an image is what a broken embed looks like.
 // They're pure branding graphics, not submission data, so exempting them
 // doesn't weaken the gate on anything that actually matters.
-const PUBLIC_PATHS = ["/login", "/icon", "/apple-icon", "/opengraph-image"];
+// robots.txt too: behind the gate, crawlers got a redirect to /login
+// instead of the "disallow everything" rules, and most read that as "no
+// rules" — the opposite of the intent.
+const PUBLIC_PATHS = ["/login", "/robots.txt", "/icon", "/apple-icon", "/opengraph-image"];
 
 // /share/<token> and /share/<token>/image are the one deliberate hole in
 // the auth gate that exposes real submission data (one artist name, one
