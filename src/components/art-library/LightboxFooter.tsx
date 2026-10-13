@@ -192,16 +192,37 @@ export function LightboxFooter({
                   </span>
                 )}
               </p>
-              <p className="text-sm text-text-muted">{asset.submissionTitle}</p>
+              {/* One line, full title on hover: a wrapped title pushed the
+                  action row out of the reserved band (globals.css). */}
+              <p className="text-sm text-text-muted truncate" title={asset.submissionTitle ?? ""}>
+                {asset.submissionTitle}
+              </p>
               {knownLabels.length > 0 && (
                 <p className="text-xs text-accent uppercase tracking-wide mt-1">
                   {knownLabels.map((l) => displayLabel(l.name)).join(" · ")}
                 </p>
               )}
-              {asset.originalFilename && (
-                <p className="text-xs text-text-muted mt-1">
-                  {asset.originalFilename}
-                  {asset.pageNumber ? ` · page ${asset.pageNumber}` : ""}
+              {(asset.originalFilename || asset.coverLetter) && (
+                <p className="flex items-baseline gap-x-2 text-xs text-text-muted mt-1 min-w-0">
+                  {asset.originalFilename && (
+                    <span className="truncate">
+                      {asset.originalFilename}
+                      {asset.pageNumber ? ` · page ${asset.pageNumber}` : ""}
+                    </span>
+                  )}
+                  {/* On the filename line rather than its own: it cost a
+                      whole row of the footer's fixed height. */}
+                  {asset.coverLetter && (
+                    <>
+                      {asset.originalFilename && <span aria-hidden>·</span>}
+                      <button
+                        onClick={() => setShowCoverLetter(true)}
+                        className="shrink-0 underline hover:text-text"
+                      >
+                        Cover Letter / Statement
+                      </button>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -232,18 +253,6 @@ export function LightboxFooter({
               </div>
             )}
           </div>
-
-          {/* Cover Letter Link */}
-          {asset.coverLetter && (
-            <div className="mb-4">
-              <button
-                onClick={() => setShowCoverLetter(true)}
-                className="text-xs text-text-muted underline hover:text-text"
-              >
-                Cover Letter / Statement
-              </button>
-            </div>
-          )}
 
           {/* Desktop Action Row */}
           <div className="hidden sm:block border-t border-border pt-3">

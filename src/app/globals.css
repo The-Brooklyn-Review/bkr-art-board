@@ -60,7 +60,11 @@ body {
 }
 @media (min-width: 640px) {
   :root {
-    --lightbox-footer-reserve: min(24vh, 220px);
+    /* Fixed, not a share of the window: the footer's content is a fixed
+       height on desktop (one-line title, statement link on the filename
+       line — ~184px), and a vh-based reserve cut its action row off on
+       shorter windows. A short window shrinks the artwork instead. */
+    --lightbox-footer-reserve: 192px;
   }
 }
 
