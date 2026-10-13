@@ -271,3 +271,25 @@ export async function syncNow(): Promise<ActionResult> {
     return { ok: false, error: `Sync failed. ${describeSubmittableError(err)}` };
   }
 }
+
+/**
+ * First-run bootstrap from the "Who's reviewing?" page: reviewers are
+ * created by the sync, but the Sync button sits behind the picker. So when
+ * no reviewer has been synced yet, the picker can run the sync itself —
+ * app-password authentication is enough here, no reviewer needed.
+ */
+export async function loadReviewersFromSubmittable(): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
+  const alreadyLoaded = await prisma.reviewer.count({
+    where: { submittableUserId: { not: null } },
+  });
+  if (alreadyLoaded > 0) return { ok: true, message: "Reviewers already loaded." };
+  try {
+    const summary = await syncSubmittable();
+    revalidatePath("/reviewer");
+    console.log(formatSyncSummary(summary));
+    return { ok: true, message: `Loaded ${summary.reviewersCreated.length} reviewers.` };
+  } catch (err) {
+    return { ok: false, error: `Couldn't load reviewers. ${describeSubmittableError(err)}` };
+  }
+}

@@ -2,8 +2,11 @@ import { getReviewers } from "@/lib/submissions/queue";
 import { getCurrentReviewer } from "@/lib/reviewer/identity";
 import { chooseReviewer } from "@/lib/actions/review";
 import { ReviewerPicker } from "@/components/review/ReviewerPicker";
+import { LoadReviewersButton } from "@/components/review/LoadReviewersButton";
 
 export const dynamic = "force-dynamic";
+// "Load reviewers from Submittable" runs a full sync as a server action here.
+export const maxDuration = 120;
 
 export default async function ReviewerPage({
   searchParams,
@@ -25,6 +28,7 @@ export default async function ReviewerPage({
         <p className="text-sm text-text-muted mt-2 mb-8">
           Your decisions, notes and label changes are posted to Submittable under this name.
         </p>
+        {reviewers.every((r) => !r.submittableUserId) && <LoadReviewersButton />}
         <ReviewerPicker
           action={chooseReviewer}
           next={next}
