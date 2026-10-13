@@ -77,16 +77,68 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const submission = await prisma.submittableSubmission.findUnique({
     where: { id },
-    include: {
-      labels: { include: { label: true } },
+    // select, not include: the rows carry big raw-JSON columns (Submittable
+    // responses, processing debug) and page text this page never shows.
+    select: {
+      id: true,
+      submittableId: true,
+      artistName: true,
+      artistEmail: true,
+      artistPhone: true,
+      artistWebsite: true,
+      submissionTitle: true,
+      coverLetter: true,
+      officialStatus: true,
+      processingStatus: true,
+      thumbnailAssetId: true,
+      lastSyncedAt: true,
+      localReviewRecommendation: true,
+      rawSubmissionJson: true, // for submittedAt
+      labels: { select: { label: { select: { submittableLabelId: true } } } },
       assets: {
-        include: { submissionFile: true },
+        select: {
+          id: true,
+          storagePathLarge: true,
+          storagePathThumbnail: true,
+          assetType: true,
+          pageNumber: true,
+          fileIndex: true,
+          pageType: true,
+          visibleInArtLibrary: true,
+          width: true,
+          height: true,
+          submissionFileId: true,
+          submissionFile: { select: { originalFilename: true } },
+        },
         orderBy: [{ fileIndex: "asc" }, { pageNumber: "asc" }],
       },
-      files: { include: { _count: { select: { assets: true } } }, orderBy: { createdAt: "asc" } },
-      notes: { orderBy: { createdAt: "desc" } },
-      assignments: { include: { reviewer: true } },
-      decisions: { orderBy: { createdAt: "desc" } },
+      files: {
+        select: {
+          id: true,
+          originalFilename: true,
+          storagePathOriginal: true,
+          processingStatus: true,
+          processingError: true,
+          _count: { select: { assets: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      notes: { select: { id: true, note: true, createdAt: true }, orderBy: { createdAt: "desc" } },
+      assignments: { select: { reviewer: { select: { id: true, displayName: true } } } },
+      decisions: {
+        select: {
+          id: true,
+          reviewerId: true,
+          reviewerName: true,
+          decision: true,
+          comment: true,
+          noteText: true,
+          pushStatus: true,
+          pushError: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
   if (!submission) return null;

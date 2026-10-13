@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hydrateGallery, type GalleryData, type GallerySubmission } from "./gallery";
+import {
+  hydrateGallery,
+  matchesLongText,
+  type GalleryData,
+  type GallerySubmission,
+} from "./gallery";
 
 const sub = (artistName: string): GallerySubmission => ({
   artistName,
@@ -45,5 +50,23 @@ describe("hydrateGallery", () => {
       ["a3", "Ana", "Statement"],
     ]);
     expect(out[0].thumbnailUrl).toBe("https://r2/a1");
+  });
+});
+
+describe("matchesLongText", () => {
+  const a = {
+    coverLetter: "My work explores the ".padEnd(400, "x ") + " Herbarium of my grandmother",
+    extractedText: "Oil on linen, 2024",
+  };
+  it("finds words anywhere in the statement or page text, any case and order", () => {
+    expect(matchesLongText(a, "herbarium")).toBe(true);
+    expect(matchesLongText(a, "grandmother  LINEN")).toBe(true);
+  });
+  it("needs every word", () => {
+    expect(matchesLongText(a, "herbarium bronze")).toBe(false);
+  });
+  it("ignores empty and one-letter searches", () => {
+    expect(matchesLongText(a, " a ")).toBe(false);
+    expect(matchesLongText({ coverLetter: null, extractedText: null }, "oil")).toBe(false);
   });
 });

@@ -4,8 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Masonry from "react-masonry-css";
 import Fuse from "fuse.js";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
-import { combinedTags, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
-import { getAssetLargeUrl } from "@/lib/actions/getAssetUrl";
+import {
+  combinedTags,
+  hydrateGallery,
+  matchesLongText,
+  type GalleryData,
+} from "@/lib/art-library/gallery";
 import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
@@ -172,8 +176,11 @@ export function ArtLibraryClient({
 
     // Apply search filter first (if provided)
     if (search.trim()) {
-      const searchResults = fuse.search(search.trim());
-      results = searchResults.map((result) => result.item);
+      const q = search.trim();
+      const hits = fuse.search(q).map((result) => result.item);
+      // Then exact matches in statements/page text the fuzzy pass missed.
+      const seen = new Set(hits.map((a) => a.id));
+      results = [...hits, ...assets.filter((a) => !seen.has(a.id) && matchesLongText(a, q))];
     }
 
     // Then apply other filters
@@ -254,8 +261,8 @@ export function ArtLibraryClient({
   // and re-hovering the same card doesn't refire it.
   const prefetchedRef = useRef<Set<string>>(new Set());
 
-  // Fetches the signed large-image URL, then preloads the actual image
-  // bytes via a detached <img> before ever touching `largeUrls` state.
+  // Preloads the large image (via api/assets/[id]/large, which redirects to
+  // a signed URL) in a detached <img> before ever touching `largeUrls` state.
   // `slides` (below) swaps its src the moment `largeUrls` has an entry —
   // committing only after `onload` means that swap is always into an
   // already-decoded image the browser can paint immediately, not into a
@@ -266,16 +273,18 @@ export function ArtLibraryClient({
   function prefetchLargeUrl(assetId: string) {
     if (largeUrls[assetId] || prefetchedRef.current.has(assetId)) return;
     prefetchedRef.current.add(assetId);
-    getAssetLargeUrl(assetId).then((url) => {
-      const img = new Image();
-      img.onload = () => setLargeUrls((prev) => ({ ...prev, [assetId]: url }));
-      img.src = url;
-    });
+    const url = `/api/assets/${assetId}/large`;
+    const img = new Image();
+    img.onload = () => setLargeUrls((prev) => ({ ...prev, [assetId]: url }));
+    // Stays on the thumbnail; forgetting it lets the next open retry.
+    img.onerror = () => prefetchedRef.current.delete(assetId);
+    img.src = url;
   }
 
   useEffect(() => {
     if (lightboxIndex === null) return;
-    [lightboxIndex - 1, lightboxIndex, lightboxIndex + 1].forEach((i) => {
+    // The slide on screen first.
+    [lightboxIndex, lightboxIndex + 1, lightboxIndex - 1].forEach((i) => {
       const asset = filtered[i];
       if (asset) prefetchLargeUrl(asset.id);
     });
@@ -442,6 +451,7 @@ export function ArtLibraryClient({
           <div className="hidden sm:flex flex-wrap gap-2">
             <button
               onClick={() => setShowStarredOnly(!showStarredOnly)}
+              aria-pressed={showStarredOnly}
               className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
                 showStarredOnly
                   ? "bg-accent text-bg border-accent"
@@ -456,6 +466,7 @@ export function ArtLibraryClient({
               <button
                 key={label}
                 onClick={() => toggleLabel(label)}
+                aria-pressed={activeLabels.has(label)}
                 className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
                   activeLabels.has(label)
                     ? "bg-accent text-bg border-accent"
@@ -476,6 +487,7 @@ export function ArtLibraryClient({
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
+              aria-label="Search the gallery"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-surface border border-border text-sm text-text px-3 py-2 sm:py-1.5 pr-8 outline-none focus:border-accent transition-colors"

@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { getSubmission } from "@/lib/submissions/getSubmission";
-import { getCurrentReviewer } from "@/lib/reviewer/identity";
+import { currentReviewerId, getReviewer } from "@/lib/reviewer/identity";
 import { parseFilters, filtersToQuery } from "@/lib/submissions/filters";
-import { getQueue, neighborsOutside } from "@/lib/submissions/queue";
+import { getQueueNav, neighborsOutside } from "@/lib/submissions/queue";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
 import { cookies } from "next/headers";
 import { formatDateTime } from "@/lib/format";
@@ -24,19 +24,22 @@ export default async function SubmissionReviewPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [{ id }, sp] = await Promise.all([params, searchParams]);
-  const reviewer = await getCurrentReviewer();
-  if (!reviewer) {
+  const [{ id }, sp, reviewerId] = await Promise.all([params, searchParams, currentReviewerId()]);
+  const toPicker = () => {
     const qs = new URLSearchParams(sp as Record<string, string>).toString();
     redirect(`/reviewer?next=${encodeURIComponent(`/submissions/${id}${qs ? `?${qs}` : ""}`)}`);
-  }
+  };
+  if (!reviewerId) toPicker();
   const filters = parseFilters(sp);
-  const [submission, queue, synced, jar] = await Promise.all([
+  // All at once — the Reviewer row is checked after, not waited on first.
+  const [reviewer, submission, queue, synced, jar] = await Promise.all([
+    getReviewer(reviewerId),
     getSubmission(id),
-    getQueue(filters, reviewer.id, false),
+    getQueueNav(filters, reviewerId!),
     lastSyncedAt(),
     cookies(),
   ]);
+  if (!reviewer) return toPicker();
   if (!submission) notFound();
 
   const index = queue.findIndex((q) => q.id === id);

@@ -42,10 +42,27 @@ export function QueueFilterBar({
   const [q, setQ] = useState(filters.q);
   const href = (o: Partial<QueueFilters>) => `/submissions${filtersToQuery(filters, o)}`;
 
+  // The page stays mounted when only the URL's query changes, so a search
+  // changed from outside this box ("Reset to my queue", Back) must be copied
+  // in — but not the one this box just sent, which would overwrite whatever
+  // was typed since.
+  const [seenQ, setSeenQ] = useState(filters.q);
+  const [sentQ, setSentQ] = useState(filters.q);
+  if (filters.q !== seenQ) {
+    setSeenQ(filters.q);
+    if (filters.q !== sentQ) {
+      setQ(filters.q);
+      setSentQ(filters.q);
+    }
+  }
+
   // Debounced search — typing shouldn't fire a server render per keystroke.
   useEffect(() => {
     if (q === filters.q) return;
-    const t = setTimeout(() => router.replace(href({ q }), { scroll: false }), 300);
+    const t = setTimeout(() => {
+      setSentQ(q);
+      router.replace(href({ q }), { scroll: false });
+    }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- href is derived from filters
   }, [q]);

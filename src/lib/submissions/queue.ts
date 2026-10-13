@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSignedR2Url } from "@/lib/storage/r2";
 import { signTiny } from "@/lib/storage/tiny";
-import { DECIDED_STATUSES } from "@/lib/submittable/statuses";
+import { DECIDED_STATUSES, statusGroupOf, type StatusGroup } from "@/lib/submittable/statuses";
 import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
 import type { QueueFilters } from "@/lib/submissions/filters";
@@ -97,11 +97,7 @@ export interface QueueRow {
   processingStatus: string;
 }
 
-export async function getQueue(
-  f: QueueFilters,
-  reviewerId: string | null,
-  withThumbs = true,
-): Promise<QueueRow[]> {
+export async function getQueue(f: QueueFilters, reviewerId: string | null): Promise<QueueRow[]> {
   const rows = await prisma.submittableSubmission.findMany({
     where: queueWhere(f, reviewerId),
     orderBy: [{ artistName: "asc" }, { id: "asc" }],
@@ -112,10 +108,13 @@ export async function getQueue(
       officialStatus: true,
       processingStatus: true,
       thumbnailAsset: { select: { storagePathThumbnail: true } },
+      // Only the fallback cover: the first visible page, else the first page.
       assets: {
-        select: { storagePathThumbnail: true, visibleInArtLibrary: true },
-        orderBy: [{ fileIndex: "asc" }, { pageNumber: "asc" }],
+        select: { storagePathThumbnail: true },
+        orderBy: [{ visibleInArtLibrary: "desc" }, { fileIndex: "asc" }, { pageNumber: "asc" }],
+        take: 1,
       },
+      _count: { select: { assets: true } },
       labels: {
         select: { label: { select: { submittableLabelId: true, name: true, color: true } } },
       },
@@ -136,10 +135,7 @@ export async function getQueue(
   return Promise.all(
     rows.map(async (r) => {
       const cover =
-        r.thumbnailAsset?.storagePathThumbnail ??
-        r.assets.find((a) => a.visibleInArtLibrary)?.storagePathThumbnail ??
-        r.assets[0]?.storagePathThumbnail ??
-        null;
+        r.thumbnailAsset?.storagePathThumbnail ?? r.assets[0]?.storagePathThumbnail ?? null;
       return {
         id: r.id,
         artistName: r.artistName,
@@ -166,12 +162,70 @@ export async function getQueue(
           decision: d.decision,
           pushStatus: d.pushStatus,
         })),
-        pageCount: r.assets.length,
-        thumbnailUrl: withThumbs && cover ? await getSignedR2Url(cover) : null,
-        tinyUrl: withThumbs && cover ? await signTiny(cover) : null,
+        pageCount: r._count.assets,
+        thumbnailUrl: cover ? await getSignedR2Url(cover) : null,
+        tinyUrl: cover ? await signTiny(cover) : null,
       };
     }),
   );
+}
+
+/**
+ * The same list as getQueue, with only what the reviewer page's sidebar and
+ * next/previous need — it runs on every J/K step.
+ */
+export async function getQueueNav(f: QueueFilters, reviewerId: string) {
+  const rows = await prisma.submittableSubmission.findMany({
+    where: queueWhere(f, reviewerId),
+    orderBy: [{ artistName: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      artistName: true,
+      submissionTitle: true,
+      decisions: {
+        where: { reviewerId },
+        select: {
+          reviewerId: true,
+          reviewerName: true,
+          decision: true,
+          pushStatus: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+  return rows.map((r) => ({ ...r, decisions: latestDecisionPerReviewer(r.decisions) }));
+}
+
+/** Submission counts per status group for the filter, in one query. */
+export async function countByStatus(
+  f: QueueFilters,
+  reviewerId: string,
+): Promise<Record<StatusGroup, number>> {
+  const groups = await prisma.submittableSubmission.groupBy({
+    by: ["officialStatus"],
+    where: queueWhere({ ...f, status: "all" }, reviewerId),
+    _count: { _all: true },
+  });
+  return bucketStatusCounts(groups.map((g) => [g.officialStatus, g._count._all]));
+}
+
+/** Pure — tested. Every status falls in exactly one group; "all" is the total. */
+export function bucketStatusCounts(
+  byStatus: [string | null, number][],
+): Record<StatusGroup, number> {
+  const counts: Record<StatusGroup, number> = {
+    undecided: 0,
+    completed: 0,
+    accepted: 0,
+    declined: 0,
+    all: 0,
+  };
+  for (const [status, n] of byStatus) {
+    counts[statusGroupOf(status)] += n;
+    counts.all += n;
+  }
+  return counts;
 }
 
 /** Reviewers to offer in the filter and the "Who's reviewing?" picker. */

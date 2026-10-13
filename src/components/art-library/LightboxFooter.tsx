@@ -38,7 +38,9 @@ export function LightboxFooter({
   const [showHideConfirm, setShowHideConfirm] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
-  const [publishError, setPublishError] = useState(false);
+  // A failed hide/share/publish. Caught rather than thrown: an error inside
+  // a transition would replace the whole gallery with the error page.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [sharePending, setSharePending] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
@@ -68,8 +70,14 @@ export function LightboxFooter({
 
   const handleHideConfirmed = () => {
     setShowHideConfirm(false);
+    setActionError(null);
     startTransition(async () => {
-      await setAssetVisibility(asset.id, false);
+      try {
+        await setAssetVisibility(asset.id, false);
+      } catch {
+        setActionError("Couldn't hide that artwork — please try again.");
+        return;
+      }
       onAssetRemoved(asset.id, null);
     });
   };
@@ -83,6 +91,8 @@ export function LightboxFooter({
         await navigator.clipboard.writeText(url);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 2000);
+      } catch {
+        setActionError("Couldn't create a share link — please try again.");
       } finally {
         setSharePending(false);
       }
@@ -92,13 +102,13 @@ export function LightboxFooter({
   const handlePublishConfirmed = () => {
     setShowPublishConfirm(false);
     setPublishPending(true);
-    setPublishError(false);
+    setActionError(null);
     startTransition(async () => {
       try {
         await markAssetPublished(asset.id);
       } catch {
         setPublishPending(false);
-        setPublishError(true);
+        setActionError("Couldn't publish that artwork — please try again.");
         return;
       }
 
@@ -136,9 +146,12 @@ export function LightboxFooter({
         onConfirm={handlePublishConfirmed}
         onCancel={() => setShowPublishConfirm(false)}
       />
-      {publishError && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10002] bg-red-950/90 border border-red-500 text-red-200 text-sm px-4 py-2 rounded shadow-lg">
-          Couldn&apos;t publish that artwork — please try again.
+      {actionError && (
+        <div
+          role="alert"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[10002] bg-red-950/90 border border-red-500 text-red-200 text-sm px-4 py-2 rounded shadow-lg"
+        >
+          {actionError}
         </div>
       )}
       <CoverLetterModal

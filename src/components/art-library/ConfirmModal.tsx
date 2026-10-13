@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { createPortal } from "react-dom";
 import { useModalTransition, MODAL_TRANSITION_STYLE } from "@/lib/hooks/useModalTransition";
 
@@ -21,6 +22,7 @@ export function ConfirmModal({
   isDestructive?: boolean;
 }) {
   const { rendered, visible } = useModalTransition(open, onCancel);
+  const id = useId();
   if (!rendered) return null;
   // Portaled to document.body: rendered from inside the lightbox's slide
   // track, which the library positions via a CSS transform. Any non-none
@@ -37,16 +39,26 @@ export function ConfirmModal({
       onClick={onCancel}
     >
       <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-message`}
         onClick={(e) => e.stopPropagation()}
         className={`bg-bg border border-border rounded-lg max-w-md w-full p-6 transition-[opacity,transform] ${
           visible ? "opacity-100 scale-100" : "opacity-0 scale-95"
         }`}
         style={MODAL_TRANSITION_STYLE}
       >
-        <h2 className="text-lg font-semibold text-text mb-2">{title}</h2>
-        <p className="text-sm text-text-muted mb-6">{message}</p>
+        <h2 id={`${id}-title`} className="text-lg font-semibold text-text mb-2">
+          {title}
+        </h2>
+        <p id={`${id}-message`} className="text-sm text-text-muted mb-6">
+          {message}
+        </p>
         <div className="flex gap-3 justify-end">
+          {/* Focus starts on the safe choice, so Enter never confirms by accident. */}
           <button
+            autoFocus
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded border border-border hover:bg-bg-hover"
           >

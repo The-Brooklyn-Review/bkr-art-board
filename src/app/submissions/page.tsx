@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getCurrentReviewer } from "@/lib/reviewer/identity";
+import { currentReviewerId, getReviewer } from "@/lib/reviewer/identity";
 import { parseFilters, filtersToQuery, type QueueFilters } from "@/lib/submissions/filters";
-import { FILTER_LABELS, getQueue, getReviewers, queueWhere } from "@/lib/submissions/queue";
+import { FILTER_LABELS, countByStatus, getQueue, getReviewers } from "@/lib/submissions/queue";
 import { STATUS_GROUPS, displayStatus, type StatusGroup } from "@/lib/submittable/statuses";
 import { lastSyncedAt } from "@/lib/sync/syncSubmittable";
 import { formatDateTime } from "@/lib/format";
@@ -13,6 +13,7 @@ import { isSyncStale } from "@/lib/sync/autoSync";
 import { QueueFilterBar } from "@/components/review/QueueFilterBar";
 import { DecisionChip } from "@/components/review/DecisionChip";
 import { TinyThumb } from "@/components/review/TinyThumb";
+import { LinkPending } from "@/components/review/LinkPending";
 
 // Signs a thumbnail URL per row per request — must not be cached.
 export const dynamic = "force-dynamic";
@@ -25,24 +26,25 @@ export default async function SubmissionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = await searchParams;
-  const reviewer = await getCurrentReviewer();
-  if (!reviewer) {
+  const [params, reviewerId] = await Promise.all([searchParams, currentReviewerId()]);
+  const toPicker = () => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     redirect(`/reviewer?next=${encodeURIComponent(`/submissions${qs ? `?${qs}` : ""}`)}`);
-  }
+  };
+  if (!reviewerId) toPicker();
   const filters = parseFilters(params);
 
-  const [rows, reviewers, synced, statusCounts] = await Promise.all([
-    getQueue(filters, reviewer.id),
+  // All at once — the Reviewer row is checked after, not waited on first.
+  const [reviewer, rows, reviewers, synced, statusCounts, assignedToMeTotal] = await Promise.all([
+    getReviewer(reviewerId),
+    getQueue(filters, reviewerId),
     getReviewers(),
     lastSyncedAt(),
-    countByStatus(filters, reviewer.id),
+    countByStatus(filters, reviewerId!),
+    prisma.submissionAssignment.count({ where: { reviewerId: reviewerId! } }),
   ]);
+  if (!reviewer) return toPicker();
   const query = filtersToQuery(filters);
-  const assignedToMeTotal = await prisma.submissionAssignment.count({
-    where: { reviewerId: reviewer.id },
-  });
 
   const decidedByMe = rows.filter((r) =>
     r.decisions.some((d) => d.reviewerId === reviewer.id),
@@ -113,7 +115,7 @@ export default async function SubmissionsPage({
                   <li key={r.id} className="border-b border-border">
                     <Link
                       href={`/submissions/${r.id}${query}`}
-                      className={`grid grid-cols-[56px_minmax(0,1fr)] ${ROW_COLS(filters.status === "all")} items-center gap-x-4 sm:gap-x-5 gap-y-1.5 py-3 px-1 hover:bg-bg-hover focus-visible:bg-bg-hover outline-none transition-colors`}
+                      className={`relative grid grid-cols-[56px_minmax(0,1fr)] ${ROW_COLS(filters.status === "all")} items-center gap-x-4 sm:gap-x-5 gap-y-1.5 py-3 px-1 hover:bg-bg-hover focus-visible:bg-bg-hover outline-none transition-colors`}
                     >
                       <div className="row-span-2 sm:row-span-1 self-start sm:self-center w-14 h-14 sm:w-16 sm:h-16 bg-surface border border-border overflow-hidden">
                         {r.thumbnailUrl ? (
@@ -174,6 +176,7 @@ export default async function SubmissionsPage({
                           {displayStatus(r.officialStatus)}
                         </span>
                       )}
+                      <LinkPending />
                     </Link>
                   </li>
                 );
@@ -196,21 +199,6 @@ function heading(f: QueueFilters, reviewers: { id: string; displayName: string }
           ? "Unassigned"
           : `Assigned to ${reviewers.find((r) => r.id === f.assigned)?.displayName ?? "reviewer"}`;
   return who;
-}
-
-async function countByStatus(
-  f: QueueFilters,
-  reviewerId: string,
-): Promise<Record<StatusGroup, number>> {
-  const entries = await Promise.all(
-    STATUS_GROUPS.map(async (g) => [
-      g.value,
-      await prisma.submittableSubmission.count({
-        where: queueWhere({ ...f, status: g.value }, reviewerId),
-      }),
-    ]),
-  );
-  return Object.fromEntries(entries) as Record<StatusGroup, number>;
 }
 
 function EmptyState({

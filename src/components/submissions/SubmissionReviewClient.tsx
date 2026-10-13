@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { preload } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
@@ -11,6 +12,7 @@ import {
   postDecision,
   retryDecision,
   setSubmissionLabel,
+  type ActionResult,
 } from "@/lib/actions/review";
 import {
   COMMENT_MAX,
@@ -29,8 +31,15 @@ import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
 import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 import { SyncStatus } from "@/components/review/SyncStatus";
 import { TinyThumb } from "@/components/review/TinyThumb";
+import { LinkPending } from "@/components/review/LinkPending";
 import { ArrowLeftIcon, ChevronIcon, ExternalIcon } from "@/components/review/icons";
 import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
+
+/** A server action that threw (network drop) rather than returning an error. */
+const UNREACHABLE: ActionResult = {
+  ok: false,
+  error: "Couldn't reach the app server — try again.",
+};
 
 interface QueueItem {
   id: string;
@@ -104,6 +113,15 @@ export function SubmissionReviewClient({
   const [queueHidden, setQueueHidden] = useState(initialQueueHidden);
   const queueRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+
+  // Start downloading the next and previous pages' full-size images, so
+  // paging through a PDF doesn't wait on a cold download each time.
+  useEffect(() => {
+    for (const i of [pageIndex + 1, pageIndex - 1]) {
+      const url = submission.assets[i]?.largeUrl;
+      if (url) preload(url, { as: "image" });
+    }
+  }, [pageIndex, submission.assets]);
 
   // Keep the current submission in view in the sidebar.
   useEffect(() => {
@@ -274,7 +292,7 @@ export function SubmissionReviewClient({
                   <Link
                     href={`/submissions/${item.id}${query}`}
                     aria-current={item.id === submission.id ? "page" : undefined}
-                    className={`flex items-start gap-2 px-4 py-2 border-b border-border text-sm ${
+                    className={`relative flex items-start gap-2 px-4 py-2 border-b border-border text-sm ${
                       item.id === submission.id
                         ? "bg-surface text-text shadow-[inset_2px_0_0_var(--color-accent)]"
                         : "text-text-muted hover:text-text hover:bg-bg-hover"
@@ -297,6 +315,7 @@ export function SubmissionReviewClient({
                         {item.myDecisionFailed && <span className="text-red-300"> !</span>}
                       </span>
                     )}
+                    <LinkPending />
                   </Link>
                 </li>
               ))}
@@ -879,13 +898,13 @@ function DecisionRow({
         showPosted={!who}
         onRetry={() =>
           start(async () => {
-            const r = await retryDecision(d.id);
+            const r = await retryDecision(d.id).catch(() => UNREACHABLE);
             setError(r.ok ? null : r.error);
           })
         }
         onConfirm={() =>
           start(async () => {
-            const r = await confirmDecisionPosted(d.id);
+            const r = await confirmDecisionPosted(d.id).catch(() => UNREACHABLE);
             setError(r.ok ? null : r.error);
           })
         }
@@ -1278,46 +1297,70 @@ function PageMenu({
   pageNumber: number;
 }) {
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const isCover = submission.thumbnailAssetId === asset.id;
-  return (
-    <Menu
-      align="right"
-      chevron={false}
-      panelClassName="w-72"
-      ariaLabel={`Page ${pageNumber} options`}
-      buttonClassName={`w-8 h-8 flex items-center justify-center bg-bg/80 border border-border text-text hover:border-accent transition-colors ${
-        pending ? "opacity-50" : ""
-      }`}
-      label={
-        <span aria-hidden className="text-base leading-none -mt-1.5">
-          ⋯
-        </span>
+  // Caught rather than thrown: an error inside a transition would replace
+  // the whole page (and any half-written comment) with the error page.
+  const run = (action: () => Promise<unknown>, failed: string) =>
+    start(async () => {
+      setError(null);
+      try {
+        await action();
+      } catch {
+        setError(failed);
       }
-    >
-      <MenuHeading>Page {pageNumber} in the Gallery</MenuHeading>
-      <MenuButton
-        disabled={pending}
-        onSelect={() =>
-          start(async () => {
-            await setAssetVisibility(asset.id, !asset.visibleInArtLibrary);
-          })
+    });
+  return (
+    <>
+      <Menu
+        align="right"
+        chevron={false}
+        panelClassName="w-72"
+        ariaLabel={`Page ${pageNumber} options`}
+        buttonClassName={`w-8 h-8 flex items-center justify-center bg-bg/80 border border-border text-text hover:border-accent transition-colors ${
+          pending ? "opacity-50" : ""
+        }`}
+        label={
+          <span aria-hidden className="text-base leading-none -mt-1.5">
+            ⋯
+          </span>
         }
       >
-        {asset.visibleInArtLibrary
-          ? "Hide this page from the Gallery"
-          : "Show this page in the Gallery"}
-      </MenuButton>
-      <MenuButton
-        disabled={pending || isCover}
-        onSelect={() =>
-          start(async () => {
-            await setSubmissionThumbnail(submission.id, asset.id);
-          })
-        }
-      >
-        {isCover ? "This page is the cover image" : "Use as the cover image"}
-      </MenuButton>
-    </Menu>
+        <MenuHeading>Page {pageNumber} in the Gallery</MenuHeading>
+        <MenuButton
+          disabled={pending}
+          onSelect={() =>
+            run(
+              () => setAssetVisibility(asset.id, !asset.visibleInArtLibrary),
+              "Couldn't change this page's visibility — try again.",
+            )
+          }
+        >
+          {asset.visibleInArtLibrary
+            ? "Hide this page from the Gallery"
+            : "Show this page in the Gallery"}
+        </MenuButton>
+        <MenuButton
+          disabled={pending || isCover}
+          onSelect={() =>
+            run(
+              () => setSubmissionThumbnail(submission.id, asset.id),
+              "Couldn't change the cover image — try again.",
+            )
+          }
+        >
+          {isCover ? "This page is the cover image" : "Use as the cover image"}
+        </MenuButton>
+      </Menu>
+      {error && (
+        <p
+          role="alert"
+          className="absolute right-0 top-10 w-64 bg-bg/90 border border-red-500/60 px-2 py-1 text-xs text-red-300"
+        >
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 
