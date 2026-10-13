@@ -4,7 +4,7 @@
  * regular thumbnail from R2, resizes it, uploads it next to it. Writes R2
  * only — no DB changes. Safe to re-run: re-uploads overwrite the same keys.
  *
- * Run (locally, or via .github/workflows/backfill-tiny.yml):
+ * Run:
  *   npx tsx scripts/backfill-tiny.ts            # every asset
  *   npx tsx scripts/backfill-tiny.ts --dry-run  # count only, write nothing
  */
