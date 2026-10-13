@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSignedR2Url } from "@/lib/storage/r2";
 
@@ -57,7 +58,27 @@ export interface LibraryAsset {
 }
 
 /**
- * All visible-in-library assets, with signed thumbnail URLs and everything
+ * Which submissions belong in the gallery: Submittable status `completed`
+ * with the "Consider" label, and NOT labelled "acceptance" (BKR's marker for
+ * work that's already been published). Undecided submissions are imported
+ * too — for the Submission Reviewer — and must not leak in here. See
+ * docs/SPEC-review-and-sync.md §2 and §9.3.
+ *
+ * Label names are matched case-insensitively because Submittable's own
+ * casing is inconsistent. `officialStatus` is whatever the last import (or,
+ * once it exists, the sync script) saw — it is not live.
+ */
+export const GALLERY_SUBMISSION_FILTER = {
+  officialStatus: "completed",
+  labels: { some: { label: { name: { equals: "Consider", mode: "insensitive" } } } },
+  NOT: {
+    labels: { some: { label: { name: { equals: "acceptance", mode: "insensitive" } } } },
+  },
+} satisfies Prisma.SubmittableSubmissionWhereInput;
+
+/**
+ * All visible-in-library assets from gallery submissions (see
+ * GALLERY_SUBMISSION_FILTER above), with signed thumbnail URLs and everything
  * the grid needs. Fetches everything in one shot rather than paginating —
  * fine at the current ~200-asset scale, filter/search happens client-side.
  * Revisit if the library grows substantially past this.
@@ -76,7 +97,10 @@ export interface LibraryAsset {
  */
 export async function getLibraryAssets(): Promise<LibraryAsset[]> {
   const assets = await prisma.artAsset.findMany({
-    where: { visibleInArtLibrary: true },
+    where: {
+      visibleInArtLibrary: true,
+      submission: GALLERY_SUBMISSION_FILTER,
+    },
     include: {
       submission: {
         include: {
