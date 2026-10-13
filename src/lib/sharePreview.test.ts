@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 
 const mockPrisma = {
   sharedArtworkLink: { findUnique: vi.fn() },
+  sharedSubmissionLink: { findUnique: vi.fn() },
 };
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 
-const { resolveShareToken, hashShareToken } = await import("./sharePreview");
+const { resolveShareToken, resolveSubmissionShareToken, hashShareToken } =
+  await import("./sharePreview");
 
 function sha256(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -18,6 +20,7 @@ function activeLink(overrides: Record<string, unknown> = {}) {
     revokedAt: null,
     expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     artAsset: {
+      submissionId: "sub-1",
       visibleInArtLibrary: true,
       usedState: "available",
       storagePathThumbnail: "path/thumb.webp",
@@ -38,6 +41,7 @@ describe("resolveShareToken", () => {
     mockPrisma.sharedArtworkLink.findUnique.mockResolvedValue(activeLink());
     await expect(resolveShareToken("tok")).resolves.toEqual({
       assetId: "asset-1",
+      submissionId: "sub-1",
       artistName: "Jane Doe",
       submissionTitle: "Piece",
       storagePathThumbnail: "path/thumb.webp",
@@ -83,6 +87,56 @@ describe("resolveShareToken", () => {
     expect(mockPrisma.sharedArtworkLink.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tokenHash: sha256("tok") } }),
     );
+  });
+});
+
+describe("resolveSubmissionShareToken", () => {
+  beforeEach(() => vi.clearAllMocks());
+  const piece = { id: "a1", storagePathThumbnail: "p/thumb.webp", width: 10, height: 10 };
+  const link = (overrides: Record<string, unknown> = {}, assets = [piece]) => ({
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 60_000),
+    submission: { id: "sub-1", artistName: "Jane Doe", submissionTitle: "Pieces", assets },
+    ...overrides,
+  });
+
+  it("resolves to the artist, title and shareable pieces only", async () => {
+    mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(link());
+    await expect(resolveSubmissionShareToken("tok")).resolves.toEqual({
+      submissionId: "sub-1",
+      artistName: "Jane Doe",
+      submissionTitle: "Pieces",
+      assets: [piece],
+    });
+    // Hidden and do-not-use pages are filtered in the query itself.
+    expect(mockPrisma.sharedSubmissionLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tokenHash: sha256("tok") } }),
+    );
+    const query = mockPrisma.sharedSubmissionLink.findUnique.mock.calls[0][0];
+    expect(query.include.submission.select.assets.where).toEqual({
+      visibleInArtLibrary: true,
+      usedState: { not: "do_not_use" },
+    });
+    // Nothing beyond pieces, name and title is even selected.
+    expect(Object.keys(query.include.submission.select).sort()).toEqual(
+      ["artistName", "assets", "id", "submissionTitle"].sort(),
+    );
+  });
+
+  it("returns null for unknown, revoked, or expired links", async () => {
+    mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(null);
+    await expect(resolveSubmissionShareToken("x")).resolves.toBeNull();
+    mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(link({ revokedAt: new Date() }));
+    await expect(resolveSubmissionShareToken("x")).resolves.toBeNull();
+    mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(
+      link({ expiresAt: new Date(Date.now() - 1000) }),
+    );
+    await expect(resolveSubmissionShareToken("x")).resolves.toBeNull();
+  });
+
+  it("returns null once no piece is left to show", async () => {
+    mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(link({}, []));
+    await expect(resolveSubmissionShareToken("x")).resolves.toBeNull();
   });
 });
 

@@ -14,13 +14,14 @@ export function SharePreviewViewer({
   alt,
   artistName,
   submissionTitle,
-  assetId,
+  openUrl,
 }: {
   imageUrl: string;
   alt: string;
   artistName: string | null;
   submissionTitle: string | null;
-  assetId: string;
+  /** Gallery, or the review page for work that isn't in it (openInAppUrl). */
+  openUrl: string;
 }) {
   return (
     <ZoomableLightbox
@@ -52,7 +53,7 @@ export function SharePreviewViewer({
               </div>
 
               <a
-                href={`/art-library?asset=${assetId}`}
+                href={openUrl}
                 className="inline-block font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
               >
                 Open in BKR Art Board

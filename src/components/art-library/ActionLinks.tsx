@@ -7,8 +7,11 @@ export function ActionLinks({
   onToggleStar,
   onHide,
   onShare,
-  sharePending = false,
-  shareCopied = false,
+  shareLabel,
+  shareBusy = false,
+  onShareSubmission,
+  shareSubmissionLabel,
+  shareSubmissionBusy = false,
   onPublish,
   publishPending = false,
   published = false,
@@ -19,8 +22,12 @@ export function ActionLinks({
   onToggleStar: () => void;
   onHide: () => void;
   onShare: () => void;
-  sharePending?: boolean;
-  shareCopied?: boolean;
+  shareLabel: string;
+  shareBusy?: boolean;
+  /** The whole submission's visible pieces (/share/s/…). */
+  onShareSubmission: () => void;
+  shareSubmissionLabel: string;
+  shareSubmissionBusy?: boolean;
   onPublish: () => void;
   publishPending?: boolean;
   published?: boolean;
@@ -41,10 +48,19 @@ export function ActionLinks({
 
       <button
         onClick={onShare}
-        disabled={sharePending}
+        disabled={shareBusy}
         className="font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
       >
-        {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
+        {shareLabel}
+      </button>
+
+      <button
+        onClick={onShareSubmission}
+        disabled={shareSubmissionBusy}
+        title="Copy a link to every piece in this submission"
+        className="font-semibold px-3 py-2 rounded border border-accent/60 text-text hover:bg-bg-hover disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+      >
+        {shareSubmissionLabel}
       </button>
 
       {asset.submittableUrl && (

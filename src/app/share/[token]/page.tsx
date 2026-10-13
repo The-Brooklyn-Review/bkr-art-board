@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { resolveShareToken } from "@/lib/sharePreview";
+import { openInAppUrl, resolveShareToken } from "@/lib/sharePreview";
 import { SharePreviewViewer } from "./SharePreviewViewer";
 
 // Re-validated on every request — a link revoked (replaced) or expired a
@@ -38,7 +38,8 @@ export async function generateMetadata({
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const { assetId, artistName, submissionTitle } = await getShare(token);
+  const { assetId, submissionId, artistName, submissionTitle } = await getShare(token);
+  const openUrl = await openInAppUrl(submissionId, assetId);
 
   return (
     <main className="min-h-screen bg-bg">
@@ -47,7 +48,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         alt={submissionTitle || "Shared artwork"}
         artistName={artistName}
         submissionTitle={submissionTitle}
-        assetId={assetId}
+        openUrl={openUrl}
       />
     </main>
   );

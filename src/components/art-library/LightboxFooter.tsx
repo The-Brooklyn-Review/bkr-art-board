@@ -4,7 +4,8 @@ import { useState, useTransition, useEffect } from "react";
 import { ChevronIcon } from "@/components/review/icons";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { setAssetVisibility, markAssetPublished } from "@/lib/actions/mutations";
-import { createShareLink } from "@/lib/actions/sharePreview";
+import { createShareLink, createSubmissionShareLink } from "@/lib/actions/sharePreview";
+import { useCopyLink } from "@/lib/ui/useCopyLink";
 import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
 import { LIGHTBOX_FOOTER_MAX_HEIGHT } from "./lightboxLayout";
 import { ActionLinks } from "./ActionLinks";
@@ -41,8 +42,18 @@ export function LightboxFooter({
   // A failed hide/share/publish. Caught rather than thrown: an error inside
   // a transition would replace the whole gallery with the error page.
   const [actionError, setActionError] = useState<string | null>(null);
-  const [sharePending, setSharePending] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
+  // Keyed by asset, so "✓ Link copied" never shows against a different
+  // artwork after a sibling jump.
+  const share = useCopyLink();
+  const artworkKey = `artwork:${asset.id}`;
+  const submissionKey = `submission:${asset.submissionId}`;
+  const shareArtwork = () =>
+    share.copy(artworkKey, async () => `/share/${await createShareLink(asset.id)}`);
+  const shareSubmission = () =>
+    share.copy(
+      submissionKey,
+      async () => `/share/s/${await createSubmissionShareLink(asset.submissionId)}`,
+    );
   const knownLabels = asset.labels.filter((l) => KNOWN_LABELS.includes(l.name));
 
   // Re-reads from localStorage whenever the lightbox navigates to a
@@ -52,10 +63,6 @@ export function LightboxFooter({
     const starred = localStorage.getItem(`starred-${asset.id}`) === "true";
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (localStorage), not derivable from props/state
     setIsStarred(starred);
-    // "✓ Link copied" is transient feedback for the asset that was just
-    // shared — carrying it across a sibling-nav jump would misattribute it
-    // to whatever asset the lightbox now shows.
-    setShareCopied(false);
   }, [asset.id]);
 
   const handleToggleStar = () => {
@@ -79,23 +86,6 @@ export function LightboxFooter({
         return;
       }
       onAssetRemoved(asset.id, null);
-    });
-  };
-
-  const handleShare = () => {
-    setSharePending(true);
-    startTransition(async () => {
-      try {
-        const token = await createShareLink(asset.id);
-        const url = `${window.location.origin}/share/${token}`;
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 2000);
-      } catch {
-        setActionError("Couldn't create a share link — please try again.");
-      } finally {
-        setSharePending(false);
-      }
     });
   };
 
@@ -174,6 +164,9 @@ export function LightboxFooter({
           setShowPublishConfirm(true);
         }}
         publishPending={publishPending}
+        // The sheet stays open so "✓ Link copied" shows where you tapped.
+        onShareSubmission={shareSubmission}
+        shareSubmissionLabel={share.label(submissionKey, "Share whole submission")}
       />
       <div
         style={{ maxHeight: LIGHTBOX_FOOTER_MAX_HEIGHT }}
@@ -262,9 +255,12 @@ export function LightboxFooter({
               isStarred={isStarred}
               onToggleStar={handleToggleStar}
               onHide={() => setShowHideConfirm(true)}
-              onShare={handleShare}
-              sharePending={sharePending}
-              shareCopied={shareCopied}
+              onShare={shareArtwork}
+              shareLabel={share.label(artworkKey, "Share artwork")}
+              shareBusy={share.copying(artworkKey)}
+              onShareSubmission={shareSubmission}
+              shareSubmissionLabel={share.label(submissionKey, "Share submission")}
+              shareSubmissionBusy={share.copying(submissionKey)}
               onPublish={() => setShowPublishConfirm(true)}
               publishPending={publishPending}
             />
@@ -287,11 +283,11 @@ export function LightboxFooter({
               </button>
 
               <button
-                onClick={handleShare}
-                disabled={sharePending}
+                onClick={shareArtwork}
+                disabled={share.copying(artworkKey)}
                 className="text-sm font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90 disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer disabled:cursor-not-allowed"
               >
-                {shareCopied ? "✓ Link copied" : sharePending ? "Copying…" : "Share link"}
+                {share.label(artworkKey, "Share link")}
               </button>
 
               {asset.submittableUrl && (

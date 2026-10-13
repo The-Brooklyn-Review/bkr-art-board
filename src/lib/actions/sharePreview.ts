@@ -3,7 +3,12 @@
 import { requireAuth } from "@/lib/requireAuth";
 
 import { prisma } from "@/lib/db";
-import { SHARE_LINK_TTL_MS, generateShareToken, hashShareToken } from "@/lib/sharePreview";
+import {
+  SHAREABLE_ASSET,
+  SHARE_LINK_TTL_MS,
+  generateShareToken,
+  hashShareToken,
+} from "@/lib/sharePreview";
 
 /**
  * One row per asset (@unique on artAssetId in the schema) — calling this
@@ -35,5 +40,28 @@ export async function createShareLink(assetId: string): Promise<string> {
     },
   });
 
+  return token;
+}
+
+/**
+ * The same for a whole submission (/share/s/<token>): one link per
+ * submission, sharing again replaces it. Refused when no page would show.
+ */
+export async function createSubmissionShareLink(submissionId: string): Promise<string> {
+  await requireAuth();
+  const shareable = await prisma.artAsset.count({ where: { submissionId, ...SHAREABLE_ASSET } });
+  if (shareable === 0) throw new Error("Nothing in this submission can be shared.");
+
+  const token = generateShareToken();
+  const data = {
+    tokenHash: hashShareToken(token),
+    expiresAt: new Date(Date.now() + SHARE_LINK_TTL_MS),
+    revokedAt: null,
+  };
+  await prisma.sharedSubmissionLink.upsert({
+    where: { submissionId },
+    create: { submissionId, ...data },
+    update: data,
+  });
   return token;
 }

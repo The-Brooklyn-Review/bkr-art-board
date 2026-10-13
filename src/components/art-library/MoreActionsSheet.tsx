@@ -13,6 +13,8 @@ export function MoreActionsSheet({
   onPublish,
   publishPending = false,
   published = false,
+  onShareSubmission,
+  shareSubmissionLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -22,6 +24,8 @@ export function MoreActionsSheet({
   onPublish: () => void;
   publishPending?: boolean;
   published?: boolean;
+  onShareSubmission: () => void;
+  shareSubmissionLabel: string;
 }) {
   const { rendered, visible } = useModalTransition(open, onClose);
   if (!rendered) return null;
@@ -57,6 +61,13 @@ export function MoreActionsSheet({
           </button>
         </div>
         <div className="flex flex-col p-2 overflow-y-auto">
+          <button
+            onClick={onShareSubmission}
+            className="text-left px-4 py-3 rounded text-sm font-medium text-text hover:bg-bg-hover"
+          >
+            {shareSubmissionLabel}
+          </button>
+
           <button
             onClick={onPublish}
             disabled={isPending || publishPending || published}

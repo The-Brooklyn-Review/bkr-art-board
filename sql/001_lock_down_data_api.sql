@@ -36,3 +36,5 @@ alter table public.review_actions          enable row level security;
 alter table public.reviewers              enable row level security;
 alter table public.submission_assignments enable row level security;
 alter table public.review_decisions       enable row level security;
+-- Added 2026-10 with whole-submission share links.
+alter table public.shared_submission_links enable row level security;

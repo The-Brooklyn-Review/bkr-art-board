@@ -5,6 +5,10 @@
 // rather than a second, possibly-drifted copy of it.
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db";
+import {
+  GALLERY_SUBMISSION_FILTER,
+  PUBLISHED_SUBMISSION_FILTER,
+} from "@/lib/art-library/getAssets";
 
 export const SHARE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // fixed 7 days — no picker
 
@@ -18,6 +22,7 @@ export function hashShareToken(token: string): string {
 
 export interface ResolvedShareAsset {
   assetId: string;
+  submissionId: string;
   artistName: string | null;
   submissionTitle: string | null;
   // Deliberately the cropped thumbnail (artwork region only, 1000px,
@@ -50,8 +55,85 @@ export async function resolveShareToken(token: string): Promise<ResolvedShareAss
 
   return {
     assetId: link.artAssetId,
+    submissionId: link.artAsset.submissionId,
     artistName: link.artAsset.submission.artistName,
     submissionTitle: link.artAsset.submission.submissionTitle,
     storagePathThumbnail: link.artAsset.storagePathThumbnail,
   };
+}
+
+/** Which pages a share may show: the same rule as a single-artwork link. */
+export const SHAREABLE_ASSET = {
+  visibleInArtLibrary: true,
+  usedState: { not: "do_not_use" },
+} as const;
+
+export interface ResolvedSubmissionShare {
+  submissionId: string;
+  artistName: string | null;
+  submissionTitle: string | null;
+  /** In the submission's own order. Thumbnails, for the same reason as above. */
+  assets: {
+    id: string;
+    storagePathThumbnail: string;
+    width: number | null;
+    height: number | null;
+  }[];
+}
+
+/**
+ * The whole-submission counterpart of resolveShareToken, same rules:
+ * revoked, expired, unknown — and a submission with no shareable pieces
+ * left (all hidden or do-not-use) — all resolve to null. Pages are
+ * re-checked on every request, so hiding one drops it from the link at
+ * once. Exposes only the pieces, the artist's name and the title.
+ */
+export async function resolveSubmissionShareToken(
+  token: string,
+): Promise<ResolvedSubmissionShare | null> {
+  const link = await prisma.sharedSubmissionLink.findUnique({
+    where: { tokenHash: hashShareToken(token) },
+    include: {
+      submission: {
+        select: {
+          id: true,
+          artistName: true,
+          submissionTitle: true,
+          assets: {
+            where: SHAREABLE_ASSET,
+            select: { id: true, storagePathThumbnail: true, width: true, height: true },
+            orderBy: [{ fileIndex: "asc" }, { pageNumber: "asc" }],
+          },
+        },
+      },
+    },
+  });
+  if (!link || link.revokedAt || link.expiresAt < new Date()) return null;
+  if (link.submission.assets.length === 0) return null;
+  return {
+    submissionId: link.submission.id,
+    artistName: link.submission.artistName,
+    submissionTitle: link.submission.submissionTitle,
+    assets: link.submission.assets,
+  };
+}
+
+/**
+ * Where "Open in BKR Art Board" goes for a signed-in viewer: the Gallery
+ * when the work is there (published work only shows with ?published=1),
+ * otherwise its review page — a share from the reviewer can be work that
+ * isn't in the Gallery.
+ */
+export async function openInAppUrl(submissionId: string, assetId: string): Promise<string> {
+  const [inGallery, published] = await Promise.all([
+    prisma.submittableSubmission.count({
+      where: { id: submissionId, ...GALLERY_SUBMISSION_FILTER },
+    }),
+    prisma.submittableSubmission.count({
+      where: { id: submissionId, ...PUBLISHED_SUBMISSION_FILTER },
+    }),
+  ]);
+  if (inGallery) return `/art-library?asset=${assetId}`;
+  if (published) return `/art-library?published=1&asset=${assetId}`;
+  return `/submissions/${submissionId}`;
 }

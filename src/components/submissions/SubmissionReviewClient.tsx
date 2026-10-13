@@ -31,10 +31,12 @@ import { displayStatus } from "@/lib/submittable/statuses";
 import { readingPeriodOf } from "@/lib/submittable/readingPeriod";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { DECISION_TONE } from "@/components/review/DecisionChip";
-import { Menu, MenuButton, MenuHeading } from "@/components/review/Menu";
+import { Menu, MenuButton, MenuDivider, MenuHeading } from "@/components/review/Menu";
 import { ReviewerMenu } from "@/components/review/ReviewerMenu";
 import { SyncStatus } from "@/components/review/SyncStatus";
 import { TinyThumb } from "@/components/review/TinyThumb";
+import { createShareLink, createSubmissionShareLink } from "@/lib/actions/sharePreview";
+import { useCopyLink } from "@/lib/ui/useCopyLink";
 import { LinkPending } from "@/components/review/LinkPending";
 import { ArrowLeftIcon, ChevronIcon, ExternalIcon } from "@/components/review/icons";
 import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
@@ -623,17 +625,20 @@ function SubmissionHeader({
           </h1>
           <EditableTitle submissionId={submission.id} title={submission.submissionTitle} />
         </div>
-        {submission.submittableUrl && (
-          <a
-            href={submission.submittableUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 mt-1 flex items-center gap-1 border border-border px-2 py-1 text-xs text-text-muted hover:text-text hover:border-text-muted transition-colors"
-            title="Open this submission in Submittable"
-          >
-            Submittable <ExternalIcon className="w-3 h-3" />
-          </a>
-        )}
+        <div className="shrink-0 mt-1 flex items-center gap-2">
+          <ShareSubmissionButton submission={submission} />
+          {submission.submittableUrl && (
+            <a
+              href={submission.submittableUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 border border-border px-2 py-1 text-xs text-text-muted hover:text-text hover:border-text-muted transition-colors"
+              title="Open this submission in Submittable"
+            >
+              Submittable <ExternalIcon className="w-3 h-3" />
+            </a>
+          )}
+        </div>
       </div>
 
       <dl className="mt-4 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
@@ -1298,6 +1303,9 @@ function PageMenu({
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const share = useCopyLink();
+  const shareKey = `artwork:${asset.id}`;
+  const shareStatus = share.label(shareKey, "");
   const isCover = submission.thumbnailAssetId === asset.id;
   // Caught rather than thrown: an error inside a transition would replace
   // the whole page (and any half-written comment) with the error page.
@@ -1351,7 +1359,24 @@ function PageMenu({
         >
           {isCover ? "This page is the cover image" : "Use as the cover image"}
         </MenuButton>
+        <MenuDivider />
+        <MenuButton
+          disabled={!asset.shareable}
+          onSelect={() =>
+            share.copy(shareKey, async () => `/share/${await createShareLink(asset.id)}`)
+          }
+        >
+          {asset.shareable ? "Copy share link to this page" : "Hidden pages can\u2019t be shared"}
+        </MenuButton>
       </Menu>
+      {shareStatus && (
+        <p
+          role="status"
+          className="absolute right-0 top-10 w-40 bg-bg/90 border border-border px-2 py-1 text-xs text-text"
+        >
+          {shareStatus}
+        </p>
+      )}
       {error && (
         <p
           role="alert"
@@ -1467,6 +1492,26 @@ function EditableTitle({ submissionId, title }: { submissionId: string; title: s
         </p>
       )}
     </>
+  );
+}
+
+/** Copies a public link to the submission's visible pieces (/share/s/…). */
+function ShareSubmissionButton({ submission }: { submission: SubmissionDetail }) {
+  const share = useCopyLink();
+  const key = `submission:${submission.id}`;
+  if (!submission.assets.some((a) => a.shareable)) return null;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        share.copy(key, async () => `/share/s/${await createSubmissionShareLink(submission.id)}`)
+      }
+      disabled={share.copying(key)}
+      title="Copy a public link to this submission's pieces (artist and titles only)"
+      className="border border-accent/60 px-2 py-1 text-xs text-text hover:bg-bg-hover transition-colors disabled:opacity-60"
+    >
+      {share.label(key, "Share")}
+    </button>
   );
 }
 

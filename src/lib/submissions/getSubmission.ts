@@ -14,6 +14,8 @@ export interface ReviewAsset {
   fileIndex: number | null;
   pageType: string;
   visibleInArtLibrary: boolean;
+  /** Can go in a share link: visible in the Gallery and not do-not-use. */
+  shareable: boolean;
   width: number | null;
   height: number | null;
   originalFilename: string | null;
@@ -105,6 +107,7 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
           fileIndex: true,
           pageType: true,
           visibleInArtLibrary: true,
+          usedState: true,
           width: true,
           height: true,
           submissionFileId: true,
@@ -157,6 +160,7 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
         fileIndex: asset.fileIndex,
         pageType: asset.pageType,
         visibleInArtLibrary: asset.visibleInArtLibrary,
+        shareable: asset.visibleInArtLibrary && asset.usedState !== "do_not_use",
         width: asset.width,
         height: asset.height,
         originalFilename: asset.submissionFile?.originalFilename ?? null,
