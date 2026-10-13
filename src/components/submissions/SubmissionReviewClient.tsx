@@ -131,14 +131,15 @@ export function SubmissionReviewClient({
 
   // Desktop: focus the comment without letting the browser scroll anything
   // but the review panel (a plain focus() can shift the whole fixed layout).
-  // Phones: the page itself scrolls, so the browser's default is right.
   const focusComment = useCallback(() => {
     const el = commentRef.current;
     if (!el) return;
     if (window.matchMedia("(min-width: 1024px)").matches) {
       el.focus({ preventScroll: true });
       revealWithin(panelRef.current, el);
-    } else el.focus();
+    }
+    // Phones: leave the page where it is — the bottom bar's Comment button
+    // is how you get to the box there, and focusing would pop the keyboard.
   }, []);
 
   const go = useCallback(
@@ -663,12 +664,11 @@ function DecisionForm({
     setChanging(false);
   }
   const formOpen = !mine || changing || decision !== null;
-  // Opening the folded form (Change, or pressing 1–3) lands in the comment.
-  const wasOpen = useRef(formOpen);
+  // Picking a decision (click or 1–3) lands in the comment box, which only
+  // exists once a decision is picked — hence an effect, not the click.
   useEffect(() => {
-    if (formOpen && !wasOpen.current) focusComment();
-    wasOpen.current = formOpen;
-  }, [formOpen, focusComment]);
+    if (decision) focusComment();
+  }, [decision, focusComment]);
 
   const preview = useMemo(
     () =>
@@ -738,10 +738,7 @@ function DecisionForm({
               key={d.value}
               role="radio"
               aria-checked={on}
-              onClick={() => {
-                setDecision(d.value);
-                focusComment();
-              }}
+              onClick={() => setDecision(d.value)}
               className={`border px-2 py-2.5 text-sm transition-colors ${
                 on
                   ? `${DECISION_TONE[d.value]} bg-surface border-current`
@@ -755,81 +752,76 @@ function DecisionForm({
         })}
       </div>
 
-      <label className="block mt-3">
-        <span className="sr-only">Comment</span>
-        <textarea
-          ref={commentRef}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          maxLength={COMMENT_MAX}
-          rows={3}
-          placeholder="Comment (optional) — e.g. “need to see the full series”"
-          className="w-full bg-surface border border-border text-sm text-text px-3 py-2 outline-none focus:border-accent resize-y"
-        />
-      </label>
+      {/* Everything about the note appears only once there's a decision to
+          post — before that, the three buttons are the whole question. */}
+      {decision && (
+        <div className="mt-5 space-y-4">
+          <label className="block">
+            <span className="block text-xs text-text-muted mb-1.5">Comment (optional)</span>
+            <textarea
+              ref={commentRef}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              maxLength={COMMENT_MAX}
+              rows={3}
+              placeholder="e.g. “need to see the full series”"
+              className="w-full bg-surface border border-border text-sm text-text px-3 py-2 outline-none focus:border-accent resize-y"
+            />
+          </label>
 
-      <div className="mt-1 text-xs text-text-muted flex items-center gap-2">
-        {editingName ? (
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => setEditingName(false)}
-            autoFocus
-            maxLength={80}
-            aria-label="Name on the note"
-            className="bg-surface border border-border text-text px-2 py-0.5 outline-none focus:border-accent"
-          />
-        ) : (
-          <>
-            Signed as <span className="text-text">{name}</span>
+          <div>
+            <div className="flex items-baseline justify-between gap-3 mb-1.5 text-xs text-text-muted">
+              <span>Posts to Submittable as a note for the editors</span>
+              {editingName ? null : (
+                <button
+                  type="button"
+                  onClick={() => setEditingName(true)}
+                  className="underline hover:text-text whitespace-nowrap"
+                  title="Change the name on the note"
+                >
+                  Edit name
+                </button>
+              )}
+            </div>
+            {editingName && (
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setEditingName(false)}
+                onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
+                autoFocus
+                maxLength={80}
+                aria-label="Name on the note"
+                className="mb-2 w-full bg-surface border border-border text-sm text-text px-3 py-1.5 outline-none focus:border-accent"
+              />
+            )}
+            <pre className="whitespace-pre-wrap font-[family-name:var(--font-ui)] text-sm text-text/90 bg-surface/60 border border-dashed border-border px-3 py-2.5 max-h-40 overflow-y-auto">
+              {preview}
+            </pre>
+          </div>
+
+          <div>
             <button
               type="button"
-              onClick={() => setEditingName(true)}
-              className="underline hover:text-text"
+              onClick={submit}
+              disabled={!draft.canPost}
+              className="w-full bg-accent text-bg px-4 py-2.5 font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              edit
+              {pending ? "Posting…" : `Post “${decisionLabel(decision)}” to Submittable`}
             </button>
-          </>
-        )}
-      </div>
-
-      {preview && (
-        <div className="mt-3">
-          <p className="text-xs text-text-muted mb-1">
-            Note for Submittable · visible to the assigned team
-          </p>
-          <pre className="whitespace-pre-wrap font-[family-name:var(--font-ui)] text-sm bg-surface border border-border px-3 py-2 max-h-40 overflow-y-auto">
-            {preview}
-          </pre>
+            <p className="mt-2 text-xs text-text-muted">
+              Notes can&rsquo;t be edited or deleted once posted.
+              <span className="hidden lg:inline"> ⌘↵ to post.</span>
+            </p>
+          </div>
         </div>
       )}
-
-      {decision ? (
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!draft.canPost}
-          className="mt-3 w-full bg-accent text-bg px-4 py-2.5 font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
-        >
-          {pending ? "Posting…" : `Post “${decisionLabel(decision)}” to Submittable`}
-        </button>
-      ) : (
-        // Not a greyed-out primary button — nothing to press yet, so it
-        // reads as an instruction rather than a broken control.
-        <p className="mt-3 w-full border border-dashed border-border text-text-muted text-sm text-center px-4 py-2.5">
-          Choose Accept, Tiered Reject or Reject
-        </p>
-      )}
-      <p className="mt-1.5 text-xs text-text-muted">
-        Notes can&rsquo;t be edited or deleted once posted.
-        <span className="hidden lg:inline"> ⌘↵ to post.</span>
-      </p>
 
       {resultBox}
     </Section>
