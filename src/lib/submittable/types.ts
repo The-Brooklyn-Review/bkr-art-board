@@ -41,6 +41,8 @@ export interface SubmissionListItem {
   submitterId: string | null;
   submissionStatus: SubmissionStatus | null;
   labels: string[] | null;
+  /** Team-member user IDs assigned to review this submission. */
+  reviewers?: string[] | null;
   submitterFirstName: string | null;
   submitterLastName: string | null;
   submitterEmail: string | null;
