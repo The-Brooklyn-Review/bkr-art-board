@@ -4,6 +4,7 @@ on:
   schedule:
     # Every 6 days at midnight UTC (prevents 7-day free tier inactivity shutdown)
     - cron: "0 0 */6 * *"
+  workflow_dispatch:
 
 jobs:
   ping:
