@@ -1,6 +1,6 @@
 # Spec — Submission Reviewer, Submittable sync, and Fall 2026 import
 
-Status: **draft, agreed in conversation 2026-10-12 — not yet implemented.**
+Status: **implemented on branch `reviewer-and-sync` (2026-10-13); schema applied to the live DB. Pending: first real label/note write-back check.**
 Scope: everything needed to (1) import the Fall 2026 open period, (2) keep the app's copy of Submittable current, (3) make the Submission Reviewer a real working tool that writes labels and review notes back to Submittable, and (4) re-scope the Art Gallery to the right subset.
 
 Read alongside `docs/ARCHITECTURE.md`. Two of its stated principles change under this spec and must be updated when this ships (see §11).
@@ -66,7 +66,7 @@ A new script, `scripts/sync-submittable.ts`, separate from the heavy importer:
 
 Triggers:
 
-- Scheduled GitHub Action once every 24 hours (new workflow alongside `tag-artwork.yml`). This also keeps the Supabase free tier awake, so `supabase-keepalive.yml` becomes redundant and can be removed once the sync workflow is proven.
+- Scheduled GitHub Action once every 24 hours (`.github/workflows/sync-submittable.yml`) (new workflow alongside `tag-artwork.yml`). This also keeps the Supabase free tier awake, so `supabase-keepalive.yml` becomes redundant and can be removed once the sync workflow is proven.
 - "Sync with Submittable" button in the app (server action, rate-limited to once per minute).
 - After any in-app write to Submittable, re-fetch that one submission (`GET /v4/submissions/{id}`) to confirm the change landed.
 

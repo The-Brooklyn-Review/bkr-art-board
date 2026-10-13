@@ -49,3 +49,4 @@ next-env.d.ts
 
 # local database dumps (contain artist contact details)
 /backups
+/localtest-mirror

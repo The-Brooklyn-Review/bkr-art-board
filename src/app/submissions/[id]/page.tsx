@@ -50,6 +50,9 @@ export default async function SubmissionReviewPage({
         artistName: q.artistName,
         submissionTitle: q.submissionTitle,
         myDecision: q.decisions.find((d) => d.reviewerId === reviewer.id)?.decision ?? null,
+        myDecisionFailed: q.decisions.some(
+          (d) => d.reviewerId === reviewer.id && d.pushStatus === "failed",
+        ),
       }))}
       position={{ index, total: queue.length, prevId, nextId }}
       query={filtersToQuery(filters)}

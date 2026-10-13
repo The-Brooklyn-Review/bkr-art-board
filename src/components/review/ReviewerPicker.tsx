@@ -13,7 +13,9 @@ export function ReviewerPicker({
   currentId: string | null;
   reviewers: { id: string; name: string; assigned: number }[];
 }) {
-  const [selected, setSelected] = useState<string>(currentId ?? reviewers[0]?.id ?? "new");
+  const [selected, setSelected] = useState<string | null>(
+    currentId ?? (reviewers.length ? null : "new"),
+  );
 
   return (
     <form action={action} className="flex flex-col gap-2">
@@ -75,7 +77,8 @@ export function ReviewerPicker({
       )}
       <button
         type="submit"
-        className="bg-accent text-bg px-4 py-3 font-medium hover:opacity-90 transition-opacity mt-4"
+        disabled={!selected}
+        className="disabled:opacity-40 bg-accent text-bg px-4 py-3 font-medium hover:opacity-90 transition-opacity mt-4"
       >
         Continue
       </button>

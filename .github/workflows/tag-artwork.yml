@@ -4,6 +4,7 @@ on:
   schedule:
     # First day of every 3 months at midnight UTC
     - cron: "0 0 1 1,4,7,10 *"
+  workflow_dispatch:
 
 jobs:
   tag:
@@ -22,6 +23,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The script signs R2 URLs to fetch each image — without these it
+          # fails on the first untagged artwork.
+          CLOUDFLARE_R2_ENDPOINT: ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
         run: npx tsx scripts/tag-all-artwork.ts
 
       - name: Notify on success

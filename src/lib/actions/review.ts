@@ -59,7 +59,10 @@ export async function chooseReviewer(formData: FormData) {
   redirect(next);
 }
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+export type ActionResult =
+  | { ok: true; message?: string }
+  /** saved: the decision was recorded here but its note didn't reach Submittable — retry it, don't re-post. */
+  | { ok: false; error: string; saved?: boolean };
 
 /** Applies or removes one allowlisted label, in Submittable first, then locally. */
 export async function setSubmissionLabel(
@@ -119,7 +122,11 @@ async function pushDecision(decisionId: string): Promise<ActionResult> {
       where: { id: decisionId },
       data: { pushStatus: "failed", pushError: error },
     });
-    return { ok: false, error: `Saved here, but not posted to Submittable. ${error}` };
+    return {
+      ok: false,
+      saved: true,
+      error: `Saved here, but not posted to Submittable (${error.replace(/\.$/, "")}). Use Retry under Decisions.`,
+    };
   }
   await prisma.$transaction([
     prisma.reviewDecision.update({

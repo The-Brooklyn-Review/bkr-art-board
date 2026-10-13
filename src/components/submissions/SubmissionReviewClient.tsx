@@ -37,6 +37,7 @@ interface QueueItem {
   artistName: string | null;
   submissionTitle: string | null;
   myDecision: string | null;
+  myDecisionFailed: boolean;
 }
 
 function ZoomControls() {
@@ -96,6 +97,12 @@ export function SubmissionReviewClient({
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const queueRef = useRef<HTMLElement>(null);
+
+  // Keep the current submission in view in the sidebar.
+  useEffect(() => {
+    queueRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "center" });
+  }, []);
 
   const go = useCallback(
     (id: string | null) => {
@@ -164,7 +171,7 @@ export function SubmissionReviewClient({
           <button
             type="button"
             onClick={() => setShowHelp((s) => !s)}
-            className="hover:text-text"
+            className="hover:text-text hidden md:inline"
             aria-expanded={showHelp}
           >
             Shortcuts
@@ -179,6 +186,7 @@ export function SubmissionReviewClient({
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
         {/* Queue */}
         <aside
+          ref={queueRef}
           className="w-60 border-r border-border overflow-y-auto shrink-0 hidden xl:block"
           aria-label="Review list"
         >
@@ -194,20 +202,23 @@ export function SubmissionReviewClient({
                       : "text-text-muted hover:text-text hover:bg-surface/50"
                   }`}
                 >
-                  <span
-                    className={`mt-1.5 w-1.5 h-1.5 shrink-0 ${item.myDecision ? "bg-accent" : "bg-transparent border border-border"}`}
-                    title={
-                      item.myDecision
-                        ? `You: ${decisionLabel(item.myDecision)}`
-                        : "Not yet decided by you"
-                    }
-                  />
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate">{item.artistName}</span>
                     <span className="block text-xs text-text-muted truncate">
                       {item.submissionTitle}
                     </span>
                   </span>
+                  {item.myDecision && (
+                    <span
+                      className={`shrink-0 text-[11px] border px-1 mt-0.5 ${DECISION_TONE[item.myDecision] ?? ""}`}
+                      title={`You: ${decisionLabel(item.myDecision)}`}
+                    >
+                      {item.myDecision === "tiered_reject"
+                        ? "Tiered"
+                        : decisionLabel(item.myDecision)}
+                      {item.myDecisionFailed && <span className="text-red-300"> !</span>}
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}
@@ -322,6 +333,7 @@ export function SubmissionReviewClient({
         {/* Review panel */}
         <aside className="lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border lg:overflow-y-auto shrink-0">
           <SubmissionHeader submission={submission} />
+          <Statement text={submission.coverLetter} />
           <DecisionForm
             submission={submission}
             reviewer={reviewer}
@@ -339,7 +351,7 @@ export function SubmissionReviewClient({
             submission={submission}
             catalog={labelCatalog}
           />
-          <Statement text={submission.coverLetter} />
+
           <PageTools submission={submission} asset={asset} pageNumber={pageIndex + 1} />
           {(submission.legacy.notes.length > 0 ||
             submission.legacy.recommendation !== "unreviewed") && (
@@ -378,40 +390,35 @@ function SubmissionHeader({ submission }: { submission: SubmissionDetail }) {
         {submission.artistName ?? "Unknown artist"}
       </h1>
       <p className="text-sm text-text-muted mt-1">{submission.submissionTitle || "Untitled"}</p>
-      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-text-muted">Status</dt>
-        <dd>{displayStatus(submission.officialStatus)}</dd>
-        <dt className="text-text-muted">Assigned to</dt>
-        <dd>
-          {submission.reviewers.length
-            ? submission.reviewers.map((r) => r.name).join(", ")
-            : "No one"}
-        </dd>
-        <dt className="text-text-muted">Files</dt>
-        <dd className="space-y-0.5">
-          {submission.files.map((f) => (
+      <p className="mt-3 text-sm text-text-muted">
+        {displayStatus(submission.officialStatus)} ·{" "}
+        {submission.reviewers.length
+          ? `assigned to ${submission.reviewers.map((r) => r.name).join(" and ")}`
+          : "unassigned"}
+      </p>
+      <ul className="mt-2 space-y-0.5 text-sm">
+        {submission.files.map((f) => (
+          <li key={f.id} className="flex min-w-0 gap-1.5">
             <a
-              key={f.id}
               href={f.originalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="block truncate underline decoration-border hover:decoration-text"
-              title={f.originalFilename ?? undefined}
+              className="truncate underline decoration-border hover:decoration-text"
+              title={`Open ${f.originalFilename ?? "file"}`}
             >
-              {f.originalFilename ?? "File"}{" "}
-              <span className="text-text-muted">
-                ({f.pageCount} {f.pageCount === 1 ? "page" : "pages"})
-              </span>
+              {f.originalFilename ?? "File"}
             </a>
-          ))}
-        </dd>
-        {(submission.artistEmail || submission.artistWebsite) && (
-          <>
-            <dt className="text-text-muted">Contact</dt>
-            <dd className="truncate">{submission.artistEmail ?? submission.artistWebsite}</dd>
-          </>
-        )}
-      </dl>
+            <span className="text-text-muted whitespace-nowrap">
+              {f.pageCount} {f.pageCount === 1 ? "page" : "pages"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {(submission.artistEmail || submission.artistWebsite) && (
+        <p className="mt-1 text-xs text-text-muted truncate">
+          {[submission.artistEmail, submission.artistWebsite].filter(Boolean).join(" · ")}
+        </p>
+      )}
       {submission.submittableUrl && (
         <a
           href={submission.submittableUrl}
@@ -438,7 +445,7 @@ function DecisionForm({
   submission: SubmissionDetail;
   reviewer: { id: string; name: string };
   decision: Decision | null;
-  setDecision: (d: Decision) => void;
+  setDecision: (d: Decision | null) => void;
   commentRef: React.RefObject<HTMLTextAreaElement | null>;
   nextId: string | null;
   onNext: () => void;
@@ -447,7 +454,16 @@ function DecisionForm({
   const [name, setName] = useState(reviewer.name);
   const [editingName, setEditingName] = useState(false);
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // Each result remembers the decision it was about, and only shows while
+  // that's still the draft — a stale error never lingers after you move on.
+  const [result, setResult] = useState<{
+    ok: boolean;
+    text: string;
+    for: Decision;
+    saved?: boolean;
+  } | null>(null);
+  const showResult =
+    result && (result.ok || result.saved ? decision === null : decision === result.for);
   const mine = submission.decisions.find((d) => d.reviewerId === reviewer.id);
 
   const preview = useMemo(
@@ -460,12 +476,26 @@ function DecisionForm({
 
   const submit = () => {
     if (!decision || pending) return;
+    const posting = decision;
     start(async () => {
-      const r = await postDecision(submission.id, { decision, reviewerName: name, comment });
+      const r = await postDecision(submission.id, {
+        decision: posting,
+        reviewerName: name,
+        comment,
+      });
       if (r.ok) {
+        // Clear the choice too: a second ⌘↵ must not post a duplicate note
+        // (notes can't be deleted from Submittable).
+        setDecision(null);
         setComment("");
-        setResult({ ok: true, text: r.message ?? "Posted to Submittable." });
-      } else setResult({ ok: false, text: r.error });
+        setResult({ ok: true, text: r.message ?? "Posted to Submittable.", for: posting });
+      } else if (r.saved) {
+        // Recorded, just not delivered: clear the form so it can't be
+        // posted twice; Retry under Decisions re-sends the same note.
+        setDecision(null);
+        setComment("");
+        setResult({ ok: false, text: r.error, for: posting, saved: true });
+      } else setResult({ ok: false, text: r.error, for: posting });
     });
   };
 
@@ -577,7 +607,7 @@ function DecisionForm({
         Notes can&rsquo;t be edited or deleted once posted. ⌘↵ to post.
       </p>
 
-      {result && (
+      {showResult && result && (
         <div role="status" className={`mt-3 text-sm ${result.ok ? "text-text" : "text-red-300"}`}>
           {result.text}
           {result.ok && nextId && (
@@ -738,10 +768,10 @@ function LabelPicker({
 function Statement({ text }: { text: string | null }) {
   const [open, setOpen] = useState(false);
   if (!text) return null;
-  const long = text.length > 420;
+  const long = text.length > 280;
   return (
     <Section
-      title="Statement and cover letter"
+      title="Statement"
       aside={
         long && (
           <button
@@ -755,7 +785,7 @@ function Statement({ text }: { text: string | null }) {
       }
     >
       <p
-        className={`text-sm text-text/90 whitespace-pre-wrap leading-relaxed ${!open && long ? "line-clamp-6" : ""}`}
+        className={`text-sm text-text/90 whitespace-pre-wrap leading-relaxed ${!open && long ? "line-clamp-4" : ""}`}
       >
         {text}
       </p>

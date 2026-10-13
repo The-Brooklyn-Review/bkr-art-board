@@ -54,8 +54,17 @@ export default async function SubmissionsPage({
           <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
             {heading(filters, reviewer.displayName, reviewers)}
           </h1>
-          <p className="text-sm text-text-muted tabular-nums">
+          <p className="text-sm text-text-muted tabular-nums text-right">
             {rows.length} {rows.length === 1 ? "submission" : "submissions"}
+            {rows.length > 0 && (
+              <>
+                {" · "}
+                {
+                  rows.filter((r) => r.decisions.some((d) => d.reviewerId === reviewer.id)).length
+                }{" "}
+                decided by you
+              </>
+            )}
           </p>
         </div>
 
@@ -111,37 +120,35 @@ export default async function SubmissionsPage({
                     </p>
                   </div>
                   <div className="min-w-0 text-xs text-text-muted flex flex-wrap gap-x-2 gap-y-1">
-                    {r.labels.length ? (
-                      r.labels.map((l) => (
-                        <span key={l.submittableLabelId} className="whitespace-nowrap">
-                          {l.name}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="hidden sm:inline text-text-muted/60">No labels</span>
-                    )}
+                    {r.labels.length
+                      ? r.labels.map((l) => (
+                          <span key={l.submittableLabelId} className="whitespace-nowrap">
+                            {l.name}
+                          </span>
+                        ))
+                      : null}
                   </div>
                   <div className="min-w-0 flex flex-wrap gap-1.5 items-center">
-                    {r.decisions.length ? (
-                      r.decisions.map((d) => (
-                        <DecisionChip
-                          key={`${d.reviewerId ?? d.reviewerName}`}
-                          reviewerName={d.reviewerName}
-                          decision={d.decision}
-                          pushStatus={d.pushStatus}
-                          compact
-                        />
-                      ))
-                    ) : (
-                      <span className="text-xs text-text-muted">
-                        {r.reviewers.length
-                          ? `Assigned to ${r.reviewers.map((x) => x.name).join(" and ")}`
-                          : "Unassigned"}
-                      </span>
-                    )}
+                    {r.decisions.length
+                      ? r.decisions.map((d) => (
+                          <DecisionChip
+                            key={`${d.reviewerId ?? d.reviewerName}`}
+                            reviewerName={d.reviewerName}
+                            decision={d.decision}
+                            pushStatus={d.pushStatus}
+                            compact
+                          />
+                        ))
+                      : null}
+                    <AssignmentNote
+                      reviewers={r.reviewers}
+                      meId={reviewer.id}
+                      filteredToMe={filters.assigned === "me"}
+                    />
                   </div>
                   <span className="hidden sm:inline text-xs text-text-muted whitespace-nowrap">
-                    {displayStatus(r.officialStatus)}
+                    {/* Only informative when the list mixes statuses. */}
+                    {filters.status === "all" ? displayStatus(r.officialStatus) : ""}
                   </span>
                 </Link>
               </li>
@@ -230,5 +237,32 @@ function EmptyState({
         Reset filters
       </Link>
     </div>
+  );
+}
+
+/** Who else is on it — "Assigned to you" filtering makes your own name noise. */
+function AssignmentNote({
+  reviewers,
+  meId,
+  filteredToMe,
+}: {
+  reviewers: { id: string; name: string }[];
+  meId: string;
+  filteredToMe: boolean;
+}) {
+  const others = reviewers.filter((r) => r.id !== meId);
+  if (filteredToMe) {
+    return others.length ? (
+      <span className="text-xs text-text-muted">
+        With {others.map((r) => r.name).join(" and ")}
+      </span>
+    ) : null;
+  }
+  return (
+    <span className="text-xs text-text-muted">
+      {reviewers.length
+        ? reviewers.map((r) => (r.id === meId ? "You" : r.name)).join(" and ")
+        : "Unassigned"}
+    </span>
   );
 }
