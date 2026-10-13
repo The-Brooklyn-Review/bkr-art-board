@@ -7,6 +7,7 @@ import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pa
 import type { SubmissionDetail, ReviewAsset } from "@/lib/submissions/getSubmission";
 import { setAssetVisibility, setSubmissionThumbnail } from "@/lib/actions/mutations";
 import {
+  confirmDecisionPosted,
   postDecision,
   refreshSubmission,
   retryDecision,
@@ -866,9 +867,16 @@ function DecisionRow({
         status={status}
         error={d.pushError}
         pending={pending}
+        showPosted={!who}
         onRetry={() =>
           start(async () => {
             const r = await retryDecision(d.id);
+            setError(r.ok ? null : r.error);
+          })
+        }
+        onConfirm={() =>
+          start(async () => {
+            const r = await confirmDecisionPosted(d.id);
             setError(r.ok ? null : r.error);
           })
         }
@@ -1092,35 +1100,72 @@ function DeliveryStatus({
   error,
   pending,
   onRetry,
+  onConfirm,
+  showPosted,
 }: {
   status: "pending" | "pushed" | "failed" | "unknown";
   error: string | null;
   pending: boolean;
   onRetry: () => void;
+  onConfirm: () => void;
+  /** Confirm delivery under your own decision; others' rows stay quiet. */
+  showPosted: boolean;
 }) {
-  if (status === "pushed") return null;
+  if (status === "pushed")
+    return showPosted ? (
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-muted">
+        <CheckIcon /> Posted to Submittable
+      </p>
+    ) : null;
+  // Only visible for the moment between saving here and Submittable answering.
   if (status === "pending")
     return <p className="mt-1.5 text-xs text-text-muted">Posting to Submittable…</p>;
   const why = error ? ` (${error.replace(/\.$/, "")})` : "";
+  const btn =
+    "border border-red-300/40 px-2 py-1 text-text hover:border-red-300 disabled:opacity-50";
   return (
     <div className="mt-2 border border-red-300/30 bg-red-300/5 px-3 py-2 text-xs text-red-200">
       {status === "failed" ? (
-        <p>Submittable refused this note{why}. Nothing was posted.</p>
+        <>
+          <p>Submittable refused this note{why}. Nothing was posted.</p>
+          <button type="button" disabled={pending} onClick={onRetry} className={`mt-2 ${btn}`}>
+            {pending ? "Posting…" : "Retry"}
+          </button>
+        </>
       ) : (
-        <p>
-          Couldn&rsquo;t confirm this note reached Submittable{why}. Check the submission&rsquo;s
-          notes there first.
-        </p>
+        <>
+          <p>
+            Couldn&rsquo;t confirm this note reached Submittable{why}. Check the submission&rsquo;s
+            notes there.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" disabled={pending} onClick={onConfirm} className={btn}>
+              It&rsquo;s there
+            </button>
+            <button type="button" disabled={pending} onClick={onRetry} className={btn}>
+              {pending ? "Posting…" : "It isn’t — post again"}
+            </button>
+          </div>
+        </>
       )}
-      <button
-        type="button"
-        disabled={pending}
-        onClick={onRetry}
-        className="mt-2 border border-red-300/40 px-2 py-1 text-text hover:border-red-300 disabled:opacity-50"
-      >
-        {pending ? "Posting…" : status === "failed" ? "Retry" : "It isn’t there — post again"}
-      </button>
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-3.5 h-3.5"
+    >
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
   );
 }
 

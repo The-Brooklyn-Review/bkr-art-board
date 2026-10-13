@@ -103,22 +103,13 @@ export async function setSubmissionLabel(
   // back to re-reading the submission from Submittable. If even that fails
   // the next page open or sync reconciles it — nothing for the reviewer to do.
   const saveLocally = () =>
-    prisma.$transaction([
-      on
-        ? prisma.submissionLabel.upsert({
-            where: { submissionId_labelId: { submissionId, labelId: label.id } },
-            update: {},
-            create: { submissionId, labelId: label.id, source: "submittable" },
-          })
-        : prisma.submissionLabel.deleteMany({ where: { submissionId, labelId: label.id } }),
-      prisma.reviewAction.create({
-        data: {
-          submissionId,
-          actionType: on ? "label_applied" : "label_removed",
-          newValue: { label: label.name, submittableLabelId, by: reviewer.displayName },
-        },
-      }),
-    ]);
+    on
+      ? prisma.submissionLabel.upsert({
+          where: { submissionId_labelId: { submissionId, labelId: label.id } },
+          update: {},
+          create: { submissionId, labelId: label.id, source: "submittable" },
+        })
+      : prisma.submissionLabel.deleteMany({ where: { submissionId, labelId: label.id } });
   try {
     await saveLocally();
   } catch {
@@ -129,8 +120,31 @@ export async function setSubmissionLabel(
       await refreshOneSubmission(submissionId).catch(() => {});
     }
   }
+  await logAction({
+    submissionId,
+    actionType: on ? "label_applied" : "label_removed",
+    newValue: { label: label.name, submittableLabelId, by: reviewer.displayName },
+  });
   revalidatePath(`/submissions/${submissionId}`);
   return { ok: true };
+}
+
+/**
+ * The audit trail is a record, not part of the operation: a failure here
+ * (e.g. the database rejecting a new action type) must never undo or block
+ * what already happened in Submittable. It used to share a transaction with
+ * the real update, so one bad audit row left a posted note marked "pending".
+ */
+async function logAction(data: {
+  submissionId: string;
+  actionType: string;
+  newValue: Record<string, unknown>;
+}) {
+  try {
+    await prisma.reviewAction.create({ data: { ...data, newValue: data.newValue as object } });
+  } catch (err) {
+    console.warn("couldn't write review_actions row", data.actionType, err);
+  }
 }
 
 /**
@@ -164,27 +178,59 @@ async function pushDecision(decisionId: string): Promise<ActionResult> {
         : `Saved here, but couldn't confirm the note reached Submittable (${error.replace(/\.$/, "")}). Check the submission's notes in Submittable before retrying.`,
     };
   }
+  const markPushed = () =>
+    prisma.reviewDecision.update({
+      where: { id: decisionId },
+      data: { pushStatus: "pushed", pushError: null, pushedAt: new Date() },
+    });
   try {
-    await prisma.$transaction([
-      prisma.reviewDecision.update({
-        where: { id: decisionId },
-        data: { pushStatus: "pushed", pushError: null, pushedAt: new Date() },
-      }),
-      prisma.reviewAction.create({
-        data: {
-          submissionId: d.submissionId,
-          actionType: "decision_posted",
-          newValue: { decision: d.decision, reviewer: d.reviewerName, decisionId },
-        },
-      }),
-    ]);
-  } catch {
+    await markPushed().catch(markPushed); // one retry
+  } catch (err) {
+    console.error("note posted but not marked pushed", decisionId, err);
     return {
       ok: true,
       message: "Posted to Submittable, but not marked as posted here — don't post it again.",
     };
   }
+  await logAction({
+    submissionId: d.submissionId,
+    actionType: "decision_posted",
+    newValue: { decision: d.decision, reviewer: d.reviewerName, decisionId },
+  });
   return { ok: true, message: "Posted to Submittable." };
+}
+
+/**
+ * "It's in Submittable": the reviewer checked and the note did arrive, so
+ * mark it posted without posting again. Only for notes whose delivery is
+ * unconfirmed (unknown, or a post that never finished).
+ */
+export async function confirmDecisionPosted(decisionId: string): Promise<ActionResult> {
+  if (!(await isAuthenticated())) return NOT_SIGNED_IN;
+  const reviewer = await getCurrentReviewer();
+  if (!reviewer) return NO_REVIEWER;
+  const updated = await prisma.reviewDecision.updateMany({
+    where: {
+      id: decisionId,
+      OR: [
+        { pushStatus: "unknown" },
+        { pushStatus: "pending", createdAt: { lt: new Date(Date.now() - STALE_PENDING_MS) } },
+      ],
+    },
+    data: { pushStatus: "pushed", pushError: null, pushedAt: new Date() },
+  });
+  const d = await prisma.reviewDecision.findUnique({ where: { id: decisionId } });
+  if (!d) return { ok: false, error: "Decision not found." };
+  if (updated.count === 1) {
+    await logAction({
+      submissionId: d.submissionId,
+      actionType: "decision_confirmed",
+      newValue: { decisionId, by: reviewer.displayName },
+    });
+  }
+  revalidatePath(`/submissions/${d.submissionId}`);
+  revalidatePath("/submissions");
+  return { ok: true };
 }
 
 /** Records a decision and posts it to Submittable as a note. */
