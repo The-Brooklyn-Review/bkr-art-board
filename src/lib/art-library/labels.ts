@@ -11,6 +11,7 @@ export const KNOWN_LABELS = [
   "collage",
   "abstract",
   "multimedia",
+  "sculpture/textile/object",
   "a grade",
   "b grade",
 ];

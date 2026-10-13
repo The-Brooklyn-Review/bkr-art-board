@@ -82,6 +82,7 @@ const KNOWN_ART_LABELS = [
   "Multimedia",
   "Abstract",
   "Collage",
+  "Sculpture/Textile/Object",
   "A Grade",
   "B Grade",
 ];

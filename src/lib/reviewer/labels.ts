@@ -21,6 +21,8 @@ export const REVIEWER_LABELS: readonly ReviewerLabel[] = [
   { submittableLabelId: "cb783812-3176-43ec-b6c1-b896b9bad334", name: "Multimedia" },
   { submittableLabelId: "2fa059a7-ed1f-4439-9fb6-2dea32fa1f21", name: "Abstract" },
   { submittableLabelId: "af88cbb0-4482-4462-9b1d-f9d780782388", name: "Collage" },
+  // Added in Submittable 2026-10-13 (Submittable spells it in capitals).
+  { submittableLabelId: "14ea1727-63f2-477b-858f-99cafbc5a4e7", name: "Sculpture/Textile/Object" },
   { submittableLabelId: "1c168259-cd77-4b47-b07f-47132cfd0e8b", name: "A Grade" },
   { submittableLabelId: "c59c8c7f-8b5e-478a-9230-77a6e4f24b50", name: "B Grade" },
 ];
