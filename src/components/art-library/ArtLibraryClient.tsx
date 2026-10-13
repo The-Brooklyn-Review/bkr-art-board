@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Masonry from "react-masonry-css";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
+import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
 import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
 import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
@@ -277,6 +278,18 @@ export function ArtLibraryClient({
   };
 
   const currentAsset = lightboxIndex !== null ? filtered[lightboxIndex] : null;
+
+  // The tab names the artwork while it's open (the lightbox doesn't load a
+  // new page, so the page's own metadata title can't), and goes back to
+  // "Gallery" when it closes.
+  useEffect(() => {
+    if (!currentAsset) return;
+    const before = document.title;
+    document.title = workTabTitle(currentAsset.artistName, currentAsset.submissionTitle);
+    return () => {
+      document.title = before;
+    };
+  }, [currentAsset]);
   const siblings = useMemo(() => {
     if (!currentAsset) return [];
     return filtered.filter((a) => a.submissionId === currentAsset.submissionId);

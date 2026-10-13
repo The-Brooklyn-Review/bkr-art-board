@@ -5,7 +5,9 @@ import { parseFilters, filtersToQuery } from "@/lib/submissions/filters";
 import { getQueueNav, neighborsOutside } from "@/lib/submissions/queue";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
 import { cookies } from "next/headers";
-import { formatDateTime } from "@/lib/format";
+import type { Metadata } from "next";
+import { prisma } from "@/lib/db";
+import { formatDateTime, workTabTitle } from "@/lib/format";
 import { lastSyncedAt } from "@/lib/sync/syncSubmittable";
 import { isSyncStale } from "@/lib/sync/autoSync";
 import { QUEUE_HIDDEN_COOKIE } from "@/lib/ui/prefs";
@@ -14,7 +16,23 @@ import { SubmissionReviewClient } from "@/components/submissions/SubmissionRevie
 // getSubmission() signs short-lived R2 URLs per request — caching this
 // route would serve expired image links.
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Review · BKR Art Board" };
+
+// The tab shows whose submission this is. A small query of its own:
+// metadata resolves separately from the page.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const s = /^[0-9a-f-]{36}$/i.test(id)
+    ? await prisma.submittableSubmission.findUnique({
+        where: { id },
+        select: { artistName: true, submissionTitle: true },
+      })
+    : null;
+  return { title: s ? workTabTitle(s.artistName, s.submissionTitle) : "Review · BKR Art Board" };
+}
 export const maxDuration = 120;
 
 export default async function SubmissionReviewPage({
