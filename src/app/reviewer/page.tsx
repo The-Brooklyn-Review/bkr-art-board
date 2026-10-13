@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { getReviewers } from "@/lib/submissions/queue";
+import { ArrowLeftIcon } from "@/components/review/icons";
 import { getCurrentReviewer } from "@/lib/reviewer/identity";
 import { chooseReviewer } from "@/lib/actions/review";
 import { ReviewerPicker } from "@/components/review/ReviewerPicker";
@@ -29,11 +31,21 @@ export default async function ReviewerPage({
   return (
     <main className="min-h-screen flex items-center justify-center bg-bg px-6 py-16">
       <div className="w-full max-w-sm">
+        {/* Only reviewing needs a name — someone who came here just to
+            browse (or by mistake) gets straight back to the Gallery. */}
+        <Link
+          href="/art-library"
+          className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text mb-8"
+        >
+          <ArrowLeftIcon />
+          Gallery
+        </Link>
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-text">
           Who&rsquo;s reviewing?
         </h1>
         <p className="text-sm text-text-muted mt-2 mb-8">
-          Your decisions, notes and label changes are posted to Submittable under this name.
+          Choose your name if you&rsquo;re reviewing artwork from the current submission cycle. Your
+          decisions, notes and label changes are posted to Submittable under this name.
         </p>
         {!loaded && <LoadReviewersButton />}
         <ReviewerPicker

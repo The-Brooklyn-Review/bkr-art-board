@@ -28,8 +28,8 @@ export function AppNav({
     <div className="flex items-center justify-between gap-4 text-sm min-h-8">
       <nav className="flex items-center gap-5" aria-label="Sections">
         <span className="font-[family-name:var(--font-display)] text-base text-text mr-1">BKR</span>
-        {tab("/submissions", "Review", current === "review")}
         {tab("/art-library", "Gallery", current === "gallery")}
+        {tab("/submissions", "Review", current === "review")}
       </nav>
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         {sync && (

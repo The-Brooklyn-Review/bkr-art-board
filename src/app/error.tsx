@@ -33,8 +33,8 @@ export default function ErrorPage({
           >
             Try again
           </button>
-          <Link href="/submissions" className="border border-border px-3 py-1.5 hover:bg-surface">
-            Back to the review list
+          <Link href="/art-library" className="border border-border px-3 py-1.5 hover:bg-surface">
+            Back to the Gallery
           </Link>
         </div>
       </div>
