@@ -30,7 +30,18 @@ const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
   main()
     .catch((err) => {
-      console.error("✗ SYNC FAILED:", err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("✗ SYNC FAILED:", message);
+      // On GitHub Actions, also raise it as an annotation, so the reason
+      // shows on the run's summary page (and through the API) without
+      // opening the raw log. Connection strings are scrubbed first.
+      if (process.env.GITHUB_ACTIONS) {
+        const safe = message
+          .replace(/postgres(ql)?:\/\/[^\s"']+/gi, "postgres://…")
+          .replace(/\r?\n/g, " ")
+          .slice(0, 900);
+        console.log(`::error title=Sync failed::${safe}`);
+      }
       process.exit(1);
     })
     .finally(() => prisma.$disconnect());
