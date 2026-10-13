@@ -64,7 +64,7 @@ export default async function SubmissionsPage({
         <PageTitle
           title={heading(filters, reviewers)}
           meta={
-            <p className="tabular-nums">
+            <p role="status" className="tabular-nums">
               {rows.length} {rows.length === 1 ? "submission" : "submissions"}
               {rows.length > 0 && <> · {decidedByMe} decided by you</>}
             </p>

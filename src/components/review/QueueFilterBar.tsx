@@ -11,6 +11,7 @@ import {
   type QueueFilters,
 } from "@/lib/submissions/filters";
 import { Menu, MenuCheckbox, MenuDivider, MenuHeading, MenuLink } from "@/components/review/Menu";
+import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
 
 const MINE_OPTIONS = [
   ["any", "Any", "Any"],
@@ -39,6 +40,10 @@ export function QueueFilterBar({
   currentReviewerId: string;
 }) {
   const router = useRouter();
+  // Every filter change navigates with scroll={false} (so menus and the
+  // search box don't jump), which kept the old scroll position in the new
+  // results; this takes the list back to the top instead.
+  useScrollToTopOnChange(filtersToQuery(filters));
   const [q, setQ] = useState(filters.q);
   const href = (o: Partial<QueueFilters>) => `/submissions${filtersToQuery(filters, o)}`;
 

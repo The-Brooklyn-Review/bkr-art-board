@@ -30,7 +30,15 @@ export function ArtCard({
 
   return (
     <button
-      onClick={onOpen}
+      onClick={(e) => {
+        // The lightbox hands focus back to whatever had it when it opened.
+        // Without this that's often the search box (Safari doesn't focus a
+        // clicked button), up in the sticky header — slid out of view
+        // after scrolling — so the browser jumped to the top to show it.
+        // Now it's this card, already on screen: you stay where you were.
+        e.currentTarget.focus({ preventScroll: true });
+        onOpen();
+      }}
       onMouseEnter={() => {
         if (!onHoverIntent) return;
         hoverTimeout.current = setTimeout(onHoverIntent, 150);
