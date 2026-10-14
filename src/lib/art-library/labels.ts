@@ -45,3 +45,23 @@ export function badgesOf(labels: { name: string }[]): string[] {
     .filter((key) => labels.some((l) => l.name === key))
     .map((key) => BADGE_LABELS[key]);
 }
+
+/**
+ * The category labels grouped for the gallery's filter menu — they're a
+ * mix of medium, style and the art editors' grade. Every KNOWN_LABELS
+ * entry except the badge labels is in exactly one group (tested).
+ */
+export const LABEL_GROUPS: { heading: string; labels: string[] }[] = [
+  {
+    heading: "Medium",
+    labels: [
+      "painting/drawing",
+      "photography",
+      "collage",
+      "sculpture/textile/object",
+      "multimedia",
+    ],
+  },
+  { heading: "Style", labels: ["abstract", "figurative", "landscape"] },
+  { heading: "Grade", labels: ["a grade", "b grade"] },
+];

@@ -107,3 +107,13 @@ describe("badge labels", () => {
     expect(displayLabel("painting/drawing")).toBe("Painting/Drawing");
   });
 });
+
+describe("label groups", () => {
+  it("put every category label in exactly one group", async () => {
+    const { BADGE_LABELS, KNOWN_LABELS, LABEL_GROUPS } = await import("./labels");
+    const grouped = LABEL_GROUPS.flatMap((g) => g.labels);
+    const categories = KNOWN_LABELS.filter((l) => !(l in BADGE_LABELS));
+    expect([...grouped].sort()).toEqual([...categories].sort());
+    expect(new Set(grouped).size).toBe(grouped.length);
+  });
+});

@@ -6,7 +6,7 @@ import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
 import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
-import { BADGE_LABELS, KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
+import { BADGE_LABELS, KNOWN_LABELS, LABEL_GROUPS, displayLabel } from "@/lib/art-library/labels";
 
 // The category labels (Landscape, Collage, A Grade…) — the poetry/fiction
 // picks have their own filter.
@@ -296,11 +296,22 @@ export function ArtLibraryClient({
     });
   const toggleLabel = toggleIn(setActiveLabels);
   const toggleFlag = toggleIn(setActiveFlags);
-  // The category labels as menu checkboxes (desktop Labels menu, phone sheet).
-  const categoryItems = CATEGORY_LABELS.map((label) => (
-    <MenuCheckbox key={label} checked={activeLabels.has(label)} onToggle={() => toggleLabel(label)}>
-      {displayLabel(label)}
-    </MenuCheckbox>
+  // The category labels as grouped menu checkboxes — Medium, Style, Grade
+  // (desktop "Medium & style" menu, phone sheet).
+  const categoryItems = LABEL_GROUPS.map((group, i) => (
+    <div key={group.heading}>
+      {i > 0 && <MenuDivider />}
+      <MenuHeading>{group.heading}</MenuHeading>
+      {group.labels.map((label) => (
+        <MenuCheckbox
+          key={label}
+          checked={activeLabels.has(label)}
+          onToggle={() => toggleLabel(label)}
+        >
+          {displayLabel(label)}
+        </MenuCheckbox>
+      ))}
+    </div>
   ));
 
   const currentAsset = lightboxIndex !== null ? filtered[lightboxIndex] : null;
@@ -502,12 +513,12 @@ export function ArtLibraryClient({
             {/* The category labels, as checkboxes in one menu — the list
                 grows whenever Submittable gets a new label. */}
             <Menu
-              sheetTitle="Labels"
+              sheetTitle="Medium & style"
               active={activeLabels.size > 0}
               panelClassName="w-60"
               label={
                 <span>
-                  <span className={activeLabels.size ? "text-text" : ""}>Labels</span>
+                  <span className={activeLabels.size ? "text-text" : ""}>Medium &amp; style</span>
                   {activeLabels.size > 0 && (
                     <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 bg-accent text-bg text-[10px] tabular-nums">
                       {activeLabels.size}
@@ -520,7 +531,7 @@ export function ArtLibraryClient({
               {activeLabels.size > 0 && (
                 <>
                   <MenuDivider />
-                  <MenuButton onSelect={() => setActiveLabels(new Set())}>Clear labels</MenuButton>
+                  <MenuButton onSelect={() => setActiveLabels(new Set())}>Clear all</MenuButton>
                 </>
               )}
             </Menu>
@@ -612,7 +623,6 @@ export function ArtLibraryClient({
                 </MenuCheckbox>
               ))}
               <MenuDivider />
-              <MenuHeading>Labels</MenuHeading>
               {categoryItems}
               <MenuDivider />
               <MenuHeading>Artwork size</MenuHeading>
