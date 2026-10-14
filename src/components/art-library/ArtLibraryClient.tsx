@@ -5,6 +5,7 @@ import Masonry from "react-masonry-css";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
+import { DENSITY_BREAKPOINTS, columnsAt } from "@/lib/art-library/density";
 import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
 import { BADGE_LABELS, KNOWN_LABELS, LABEL_GROUPS, displayLabel } from "@/lib/art-library/labels";
 
@@ -33,15 +34,6 @@ import {
 // mobile layout/DOM cost (loading="lazy" already defers network fetches,
 // but it doesn't defer DOM node creation or masonry's layout pass).
 const GRID_BATCH_SIZE = 60;
-
-const DENSITY_BREAKPOINTS: Record<
-  "compact" | "default" | "large",
-  Record<string | number, number>
-> = {
-  compact: { default: 7, 1600: 6, 1280: 5, 960: 4, 640: 2 },
-  default: { default: 6, 1600: 5, 1280: 4, 960: 3, 640: 2 },
-  large: { default: 4, 1600: 3, 1280: 3, 960: 2, 640: 1 },
-};
 
 function DensityToggle({
   density,
@@ -80,17 +72,19 @@ function DensityToggle({
  * a view setting, not a filter, so it doesn't belong in the Filters sheet.
  */
 function ColumnsToggle({
-  density,
+  columns,
   setDensity,
   className = "",
 }: {
-  density: "compact" | "default" | "large";
+  /** What's on screen now (M is one per row on a phone, two a bit wider). */
+  columns: number;
   setDensity: (d: "compact" | "default" | "large") => void;
   className?: string;
 }) {
+  // L is one per row and S two, at any phone width.
   const options = [
     { d: "large", label: "One per row", bars: 1 },
-    { d: "default", label: "Two per row", bars: 2 },
+    { d: "compact", label: "Two per row", bars: 2 },
   ] as const;
   return (
     <div
@@ -99,7 +93,7 @@ function ColumnsToggle({
       aria-label="Artworks per row"
     >
       {options.map((o) => {
-        const on = o.d === "large" ? density === "large" : density !== "large";
+        const on = columns === o.bars;
         return (
           <button
             key={o.d}
@@ -181,14 +175,14 @@ export function ArtLibraryClient({
   const [visibleCount, setVisibleCount] = useState(GRID_BATCH_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Two columns reads as cramped on a phone-width screen — default to one
-  // artwork at a time there. Checked once on mount (not on every resize),
-  // so picking "Medium" by hand doesn't get silently reset. Can't read
-  // window.innerWidth in the initial useState (SSR has no window), hence
-  // the effect instead of an initializer.
+  // The window width, for the phone toggle to show what's on screen.
+  // Null until mounted (no window on the server).
+  const [width, setWidth] = useState<number | null>(null);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate one-time mount read, see comment above
-    if (window.innerWidth < 640) setDensity("large");
+    const read = () => setWidth(window.innerWidth);
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
   }, []);
 
   const runSearch = useMemo(() => createGallerySearch(assets), [assets]);
@@ -485,7 +479,11 @@ export function ArtLibraryClient({
                 prominent
                 className="hidden sm:flex"
               />
-              <ColumnsToggle density={density} setDensity={setDensity} className="sm:hidden" />
+              <ColumnsToggle
+                columns={columnsAt(density, width ?? 375)}
+                setDensity={setDensity}
+                className="sm:hidden"
+              />
             </>
           }
         />
