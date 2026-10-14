@@ -25,6 +25,7 @@ export function Menu({
   ariaLabel,
   chevron = true,
   sheetTitle,
+  fullHeightSheet = false,
 }: {
   label: React.ReactNode;
   children: React.ReactNode;
@@ -37,6 +38,8 @@ export function Menu({
   chevron?: boolean;
   /** Heading for the phone sheet; defaults to ariaLabel. */
   sheetTitle?: string;
+  /** On phones, open as a full-height sheet (for long lists of options). */
+  fullHeightSheet?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [asSheet, setAsSheet] = useState(false);
@@ -130,7 +133,9 @@ export function Menu({
               id={id}
               role="menu"
               aria-label={sheetTitle ?? ariaLabel}
-              className="relative bg-surface border-t border-border max-h-[80vh] flex flex-col pb-[env(safe-area-inset-bottom)]"
+              className={`relative bg-surface border-t border-border flex flex-col pb-[env(safe-area-inset-bottom)] ${
+                fullHeightSheet ? "h-[100dvh]" : "max-h-[80vh]"
+              }`}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <p className="font-[family-name:var(--font-display)] text-lg text-text">
@@ -144,7 +149,7 @@ export function Menu({
                   Done
                 </button>
               </div>
-              <div className="overflow-y-auto py-1">
+              <div className="flex-1 min-h-0 overflow-y-auto py-1">
                 <CloseContext.Provider value={() => setOpen(false)}>
                   {children}
                 </CloseContext.Provider>

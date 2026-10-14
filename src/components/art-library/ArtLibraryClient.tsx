@@ -75,6 +75,59 @@ function DensityToggle({
   );
 }
 
+/**
+ * Phones: one or two artworks per row, as a small toggle by the title —
+ * a view setting, not a filter, so it doesn't belong in the Filters sheet.
+ */
+function ColumnsToggle({
+  density,
+  setDensity,
+  className = "",
+}: {
+  density: "compact" | "default" | "large";
+  setDensity: (d: "compact" | "default" | "large") => void;
+  className?: string;
+}) {
+  const options = [
+    { d: "large", label: "One per row", bars: 1 },
+    { d: "default", label: "Two per row", bars: 2 },
+  ] as const;
+  return (
+    <div
+      className={`flex border border-border shrink-0 ${className}`}
+      role="group"
+      aria-label="Artworks per row"
+    >
+      {options.map((o) => {
+        const on = o.d === "large" ? density === "large" : density !== "large";
+        return (
+          <button
+            key={o.d}
+            type="button"
+            onClick={() => setDensity(o.d)}
+            aria-pressed={on}
+            aria-label={o.label}
+            title={o.label}
+            className={`w-9 h-8 flex items-center justify-center gap-0.5 transition-colors ${
+              on ? "bg-accent text-bg" : "text-text-muted hover:text-text"
+            }`}
+          >
+            {Array.from({ length: o.bars }, (_, i) => (
+              <span
+                key={i}
+                aria-hidden
+                className={`block h-3.5 border-[1.5px] border-current rounded-[1px] ${
+                  o.bars === 1 ? "w-3.5" : "w-1.5"
+                }`}
+              />
+            ))}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ArtLibraryClient({
   data,
   submissionCount,
@@ -425,12 +478,15 @@ export function ArtLibraryClient({
             </>
           }
           aside={
-            <DensityToggle
-              density={density}
-              setDensity={setDensity}
-              prominent
-              className="hidden sm:flex"
-            />
+            <>
+              <DensityToggle
+                density={density}
+                setDensity={setDensity}
+                prominent
+                className="hidden sm:flex"
+              />
+              <ColumnsToggle density={density} setDensity={setDensity} className="sm:hidden" />
+            </>
           }
         />
 
@@ -475,7 +531,9 @@ export function ArtLibraryClient({
           {/* Search first, at a sensible width (it used to be squeezed onto
               a full-width row of its own by thirteen label chips). Phones:
               search fills the row, everything else is in Filters. */}
-          <div className="relative flex-1 min-w-0 sm:flex-none sm:w-72 sm:order-first">
+          {/* Grows to 18rem but shrinks (to 10rem) before anything wraps,
+              so the toolbar stays one row down to tablet width. */}
+          <div className="relative flex-1 min-w-0 sm:basis-40 sm:max-w-72 sm:order-first">
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
@@ -496,7 +554,7 @@ export function ArtLibraryClient({
             )}
           </div>
 
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <button
               onClick={() => setShowStarredOnly(!showStarredOnly)}
               aria-pressed={showStarredOnly}
@@ -560,6 +618,7 @@ export function ArtLibraryClient({
             <Menu
               align="right"
               sheetTitle="Filters"
+              fullHeightSheet
               active={mobileFilterCount > 0}
               buttonClassName={`flex items-center gap-2 text-sm px-3 py-2 border ${
                 mobileFilterCount > 0 ? "border-accent text-text" : "border-border text-text"
@@ -624,18 +683,6 @@ export function ArtLibraryClient({
               ))}
               <MenuDivider />
               {categoryItems}
-              <MenuDivider />
-              <MenuHeading>Artwork size</MenuHeading>
-              {(
-                [
-                  ["large", "One per row"],
-                  ["default", "Two per row"],
-                ] as const
-              ).map(([d, text]) => (
-                <MenuRadio key={d} checked={density === d} onSelect={() => setDensity(d)}>
-                  {text}
-                </MenuRadio>
-              ))}
             </Menu>
           </div>
         </div>
