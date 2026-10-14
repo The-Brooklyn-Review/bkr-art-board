@@ -6,7 +6,11 @@ import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
 import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
-import { KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
+import { BADGE_LABELS, KNOWN_LABELS, displayLabel } from "@/lib/art-library/labels";
+
+// The category labels (Landscape, Collage, A Grade…) — the poetry/fiction
+// picks have their own filter.
+const CATEGORY_LABELS = KNOWN_LABELS.filter((l) => !(l in BADGE_LABELS));
 import { ArtCard } from "./ArtCard";
 import { LightboxFooter } from "./LightboxFooter";
 import { ZoomableLightbox } from "./ZoomableLightbox";
@@ -16,6 +20,7 @@ import { AppNav } from "@/components/review/AppNav";
 import { AppHeader, PageTitle } from "@/components/review/AppHeader";
 import {
   Menu,
+  MenuButton,
   MenuCheckbox,
   MenuDivider,
   MenuHeading,
@@ -104,6 +109,10 @@ export function ArtLibraryClient({
   }
   const [search, setSearch] = useState("");
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
+  // "For poetry" / "For fiction" (label names, see BADGE_LABELS): any of
+  // these, AND any of the category labels — "for poetry" + "collage" is
+  // the poetry picks that are collages.
+  const [activeFlags, setActiveFlags] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   // Reading period ("Winter ’25", "Fall ’26"): the coarsest cut — which
   // cycle's work you're choosing from — so it sits above the label chips.
@@ -164,10 +173,12 @@ export function ArtLibraryClient({
         if (!isStarred) return false;
       }
 
-      if (activeLabels.size > 0) {
-        const assetLabelNames = new Set(a.labels.map((l) => l.name));
-        const matchesAnyActive = [...activeLabels].some((l) => assetLabelNames.has(l));
-        if (!matchesAnyActive) return false;
+      const assetLabelNames = new Set(a.labels.map((l) => l.name));
+      if (activeFlags.size > 0 && ![...activeFlags].some((l) => assetLabelNames.has(l))) {
+        return false;
+      }
+      if (activeLabels.size > 0 && ![...activeLabels].some((l) => assetLabelNames.has(l))) {
+        return false;
       }
       return true;
     });
@@ -175,18 +186,25 @@ export function ArtLibraryClient({
     // a search keeps its relevance order instead.
     if (hits) return kept;
     return [...kept].sort((x, y) => (x.period?.sortKey ?? 0) - (y.period?.sortKey ?? 0));
-  }, [assets, search, activeLabels, showStarredOnly, runSearch, activePeriod]);
+  }, [assets, search, activeLabels, activeFlags, showStarredOnly, runSearch, activePeriod]);
 
   // What's shown changed (search, filters, published toggle): back to the
   // top, showing the first batch again. Not for opening/closing an artwork
   // or hiding/publishing one — those keep your place.
   useScrollToTopOnChange(
-    JSON.stringify([search, [...activeLabels], showStarredOnly, activePeriod, includePublished]),
+    JSON.stringify([
+      search,
+      [...activeLabels],
+      [...activeFlags],
+      showStarredOnly,
+      activePeriod,
+      includePublished,
+    ]),
   );
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting pagination on filter change, not worth the in-render-adjustment rewrite at this list size
     setVisibleCount(GRID_BATCH_SIZE);
-  }, [search, activeLabels, showStarredOnly, activePeriod]);
+  }, [search, activeLabels, activeFlags, showStarredOnly, activePeriod]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -266,16 +284,24 @@ export function ArtLibraryClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxIndex, filtered]);
 
-  const mobileFilterCount = Number(showStarredOnly) + Number(includePublished) + activeLabels.size;
+  const mobileFilterCount =
+    Number(showStarredOnly) + Number(includePublished) + activeLabels.size + activeFlags.size;
 
-  const toggleLabel = (name: string) => {
-    setActiveLabels((prev) => {
+  const toggleIn = (set: typeof setActiveLabels) => (name: string) =>
+    set((prev) => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
       return next;
     });
-  };
+  const toggleLabel = toggleIn(setActiveLabels);
+  const toggleFlag = toggleIn(setActiveFlags);
+  // The category labels as menu checkboxes (desktop Labels menu, phone sheet).
+  const categoryItems = CATEGORY_LABELS.map((label) => (
+    <MenuCheckbox key={label} checked={activeLabels.has(label)} onToggle={() => toggleLabel(label)}>
+      {displayLabel(label)}
+    </MenuCheckbox>
+  ));
 
   const currentAsset = lightboxIndex !== null ? filtered[lightboxIndex] : null;
 
@@ -435,42 +461,10 @@ export function ArtLibraryClient({
               <span aria-hidden className="hidden sm:block w-px h-5 bg-border mx-1" />
             </>
           )}
-          <div className="hidden sm:flex flex-wrap gap-2">
-            <button
-              onClick={() => setShowStarredOnly(!showStarredOnly)}
-              aria-pressed={showStarredOnly}
-              className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
-                showStarredOnly
-                  ? "bg-accent text-bg border-accent"
-                  : "border-border text-text-muted hover:border-accent hover:text-text"
-              }`}
-              title="Show only your starred artworks"
-            >
-              ⭐ Your stars
-            </button>
-            <span aria-hidden className="shrink-0 w-px self-stretch bg-border mx-1" />
-            {KNOWN_LABELS.map((label) => (
-              <button
-                key={label}
-                onClick={() => toggleLabel(label)}
-                aria-pressed={activeLabels.has(label)}
-                className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
-                  activeLabels.has(label)
-                    ? "bg-accent text-bg border-accent"
-                    : "border-border text-text-muted hover:border-accent hover:text-text"
-                }`}
-              >
-                {displayLabel(label)}
-              </button>
-            ))}
-          </div>
-
-          {/* flex-1 + min-w-64: takes only the room left after the pills
-              when it fits on their row, but once that's under 256px it
-              wraps to its own line and, alone there, flex-1 stretches it
-              to that line's full width — no separate breakpoint rule
-              needed for the "dropped to its own row" case. */}
-          <div className="relative flex-1 min-w-0 sm:min-w-64">
+          {/* Search first, at a sensible width (it used to be squeezed onto
+              a full-width row of its own by thirteen label chips). Phones:
+              search fills the row, everything else is in Filters. */}
+          <div className="relative flex-1 min-w-0 sm:flex-none sm:w-72 sm:order-first">
             <input
               type="text"
               placeholder="Artist, title, color, mood, tag…"
@@ -489,6 +483,66 @@ export function ArtLibraryClient({
                 ✕
               </button>
             )}
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2">
+            <button
+              onClick={() => setShowStarredOnly(!showStarredOnly)}
+              aria-pressed={showStarredOnly}
+              className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
+                showStarredOnly
+                  ? "bg-accent text-bg border-accent"
+                  : "border-border text-text-muted hover:border-accent hover:text-text"
+              }`}
+              title="Show only your starred artworks"
+            >
+              ⭐ Your stars
+            </button>
+
+            {/* The category labels, as checkboxes in one menu — the list
+                grows whenever Submittable gets a new label. */}
+            <Menu
+              sheetTitle="Labels"
+              active={activeLabels.size > 0}
+              panelClassName="w-60"
+              label={
+                <span>
+                  <span className={activeLabels.size ? "text-text" : ""}>Labels</span>
+                  {activeLabels.size > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 bg-accent text-bg text-[10px] tabular-nums">
+                      {activeLabels.size}
+                    </span>
+                  )}
+                </span>
+              }
+            >
+              {categoryItems}
+              {activeLabels.size > 0 && (
+                <>
+                  <MenuDivider />
+                  <MenuButton onSelect={() => setActiveLabels(new Set())}>Clear labels</MenuButton>
+                </>
+              )}
+            </Menu>
+
+            <span aria-hidden className="shrink-0 w-px h-5 bg-border mx-1" />
+            {/* The poetry/fiction editors' picks: one click each, since
+                that's what anyone outside the art team comes looking for. */}
+            {Object.entries(BADGE_LABELS).map(([key, text]) => (
+              <button
+                key={key}
+                onClick={() => toggleFlag(key)}
+                aria-pressed={activeFlags.has(key)}
+                title={`Submissions labelled “${displayLabel(key)}” in Submittable`}
+                className={`shrink-0 text-xs px-3 py-1.5 border transition-colors ${
+                  activeFlags.has(key)
+                    ? "bg-accent text-bg border-accent"
+                    : "border-accent/60 text-accent hover:bg-accent/10"
+                }`}
+              >
+                {text}
+              </button>
+            ))}
           </div>
 
           <div className="sm:hidden">
@@ -547,16 +601,19 @@ export function ArtLibraryClient({
                 Include published artists
               </MenuLink>
               <MenuDivider />
-              <MenuHeading>Labels</MenuHeading>
-              {KNOWN_LABELS.map((label) => (
+              <MenuHeading>For the poetry &amp; fiction editors</MenuHeading>
+              {Object.entries(BADGE_LABELS).map(([key, text]) => (
                 <MenuCheckbox
-                  key={label}
-                  checked={activeLabels.has(label)}
-                  onToggle={() => toggleLabel(label)}
+                  key={key}
+                  checked={activeFlags.has(key)}
+                  onToggle={() => toggleFlag(key)}
                 >
-                  {displayLabel(label)}
+                  {text}
                 </MenuCheckbox>
               ))}
+              <MenuDivider />
+              <MenuHeading>Labels</MenuHeading>
+              {categoryItems}
               <MenuDivider />
               <MenuHeading>Artwork size</MenuHeading>
               {(
@@ -572,6 +629,24 @@ export function ArtLibraryClient({
             </Menu>
           </div>
         </div>
+
+        {/* The labels picked in the menu, each removable — so a filter
+            hidden in a menu is never invisible. */}
+        {activeLabels.size > 0 && (
+          <div className="hidden sm:flex flex-wrap items-center gap-2 mt-2 text-xs">
+            {CATEGORY_LABELS.filter((l) => activeLabels.has(l)).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => toggleLabel(l)}
+                aria-label={`Remove label filter ${displayLabel(l)}`}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-accent text-bg hover:opacity-85"
+              >
+                {displayLabel(l)} <span aria-hidden>×</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Always mounted so screen readers announce the count as it changes. */}
         <p role="status" className="text-xs text-text-muted empty:hidden mt-2">
