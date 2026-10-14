@@ -2,7 +2,7 @@
 // page and the detail page's sidebar / next-previous.
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { signTiny } from "@/lib/storage/tiny";
+import { signTiny } from "@/lib/storage/variants";
 import { DECIDED_STATUSES, statusGroupOf, type StatusGroup } from "@/lib/submittable/statuses";
 import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";

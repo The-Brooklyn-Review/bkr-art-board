@@ -1,6 +1,10 @@
 import { useRef } from "react";
+import { VARIANTS } from "@/lib/storage/variantSizes";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { BADGE_LABELS, KNOWN_LABELS, badgesOf, displayLabel } from "@/lib/art-library/labels";
+
+// The card copy's width (the thumbnail is up to 1000px).
+const CARD_WIDTH = VARIANTS.card.size;
 
 const USED_STATE_LABELS: Record<string, string> = {
   available: "Available",
@@ -13,10 +17,13 @@ const USED_STATE_LABELS: Record<string, string> = {
 
 export function ArtCard({
   asset,
+  sizes,
   onOpen,
   onHoverIntent,
 }: {
   asset: LibraryAsset;
+  /** The card's width per breakpoint, for the srcset (cardSizes). */
+  sizes: string;
   onOpen: () => void;
   /** Called after the pointer lingers on the card for a moment — a quick
    * pass-through while scrolling shouldn't trigger a prefetch. */
@@ -63,6 +70,21 @@ export function ArtCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={asset.thumbnailUrl}
+          // Both sizes; the browser picks by the card's width on this
+          // screen (sizes) — the 600px card image on most desktop layouts,
+          // the thumbnail (up to 1000px) for big cards and phones. Only
+          // offered when the thumbnail is actually wider than the card copy.
+          srcSet={
+            asset.cardUrl && asset.width && asset.width > CARD_WIDTH
+              ? `${asset.cardUrl} ${CARD_WIDTH}w, ${asset.thumbnailUrl} ${asset.width}w`
+              : undefined
+          }
+          sizes={sizes}
+          // A missing card copy (not generated yet): drop the srcset and
+          // use the thumbnail.
+          onError={(e) => {
+            if (e.currentTarget.srcset) e.currentTarget.removeAttribute("srcset");
+          }}
           alt={asset.submissionTitle ?? ""}
           loading="lazy"
           width={asset.width ?? undefined}

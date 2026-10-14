@@ -37,7 +37,7 @@ import { uploadToR2 } from "@/lib/storage/r2";
 import { renderPdfPages, extractPdfPagesText } from "@/lib/processing/pdf";
 import { classifyPage } from "@/lib/processing/classify";
 import { extractArtworkRegion } from "@/lib/processing/crop";
-import { renderTiny } from "@/lib/processing/tiny";
+import { renderVariant } from "@/lib/processing/variants";
 import { submittableFetch } from "@/lib/submittable/client";
 import type { EntriesResponse } from "@/lib/submittable/types";
 
@@ -121,12 +121,16 @@ async function processImageVariants(sourceBuffer: Buffer, isArtwork: boolean) {
     .toBuffer();
 
   const thumbMeta = await sharp(thumb).metadata();
-  const tiny = await renderTiny(thumb);
+  const [tiny, card] = await Promise.all([
+    renderVariant(thumb, "tiny"),
+    renderVariant(thumb, "card"),
+  ]);
 
   return {
     full,
     thumb,
     tiny,
+    card,
     width: thumbMeta.width ?? null,
     height: thumbMeta.height ?? null,
     aspectRatio: thumbMeta.width && thumbMeta.height ? thumbMeta.width / thumbMeta.height : null,
@@ -142,9 +146,11 @@ export type PreparedAsset = {
   largeBuffer: Buffer;
   thumbKey: string;
   thumbBuffer: Buffer;
-  /** Review-list size; see src/lib/storage/tiny.ts. */
+  /** Smaller copies of the thumbnail; see src/lib/storage/variants.ts. */
   tinyKey: string;
   tinyBuffer: Buffer;
+  cardKey: string;
+  cardBuffer: Buffer;
   width: number | null;
   height: number | null;
   aspectRatio: number | null;
@@ -198,6 +204,8 @@ async function prepareAssets(
         thumbBuffer: variants.thumb,
         tinyKey: `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-tiny.webp`,
         tinyBuffer: variants.tiny,
+        cardKey: `submittable/${submissionId}/rendered/${file.fileId}/page-${pageNum + 1}-card.webp`,
+        cardBuffer: variants.card,
         width: variants.width,
         height: variants.height,
         aspectRatio: variants.aspectRatio,
@@ -223,6 +231,8 @@ async function prepareAssets(
         thumbBuffer: variants.thumb,
         tinyKey: `submittable/${submissionId}/rendered/${file.fileId}/image-tiny.webp`,
         tinyBuffer: variants.tiny,
+        cardKey: `submittable/${submissionId}/rendered/${file.fileId}/image-card.webp`,
+        cardBuffer: variants.card,
         width: variants.width,
         height: variants.height,
         aspectRatio: variants.aspectRatio,
@@ -269,6 +279,7 @@ export async function replaceFileAssets(
       await uploadToR2(asset.largeKey, asset.largeBuffer, "image/webp");
       await uploadToR2(asset.thumbKey, asset.thumbBuffer, "image/webp");
       await uploadToR2(asset.tinyKey, asset.tinyBuffer, "image/webp");
+      await uploadToR2(asset.cardKey, asset.cardBuffer, "image/webp");
     }
 
     // A curator-picked thumbnail pointing at one of this file's OLD assets

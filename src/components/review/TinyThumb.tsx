@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * A small square image (review list rows, the reviewer's page strip). Shows
  * the tiny variant and falls back to the regular thumbnail if it hasn't
- * been generated for this artwork (see src/lib/storage/tiny.ts).
+ * been generated for this artwork (see src/lib/storage/variants.ts).
  */
 export function TinyThumb({
   tinyUrl,

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { submissionDateOf } from "@/lib/submittable/readingPeriod";
 import { getSignedR2Url } from "@/lib/storage/r2";
-import { signTiny } from "@/lib/storage/tiny";
+import { signTiny } from "@/lib/storage/variants";
 
 export interface ReviewAsset {
   id: string;

@@ -11,7 +11,7 @@ import { fetchAllPages } from "@/lib/submittable/client";
 import type { Label, ListProject, SubmissionListItem } from "@/lib/submittable/types";
 import { getTeamMembers, teamMemberName } from "@/lib/submittable/writes";
 import { deleteFromR2 } from "@/lib/storage/r2";
-import { tinyKeyFor } from "@/lib/storage/tiny";
+import { allVariantKeys } from "@/lib/storage/variants";
 import { planSync, sameSet, type RemoteSubmission } from "@/lib/sync/plan";
 
 export interface SyncOptions {
@@ -304,7 +304,7 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
         ...assets.flatMap((a) => [
           a.storagePathLarge,
           a.storagePathThumbnail,
-          tinyKeyFor(a.storagePathThumbnail) ?? "",
+          ...allVariantKeys(a.storagePathThumbnail),
         ]),
         ...files.map((f) => f.storagePathOriginal),
       ]);

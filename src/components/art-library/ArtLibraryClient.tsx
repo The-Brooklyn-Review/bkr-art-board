@@ -5,7 +5,7 @@ import Masonry from "react-masonry-css";
 import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
-import { DENSITY_BREAKPOINTS, columnsAt } from "@/lib/art-library/density";
+import { DENSITY_BREAKPOINTS, cardSizes, columnsAt } from "@/lib/art-library/density";
 import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
 import { BADGE_LABELS, KNOWN_LABELS, LABEL_GROUPS, displayLabel } from "@/lib/art-library/labels";
 
@@ -726,6 +726,7 @@ export function ArtLibraryClient({
             >
               {visibleAssets.map((asset) => (
                 <ArtCard
+                  sizes={cardSizes(density)}
                   key={asset.id}
                   asset={asset}
                   onOpen={() => openAsset(asset.id)}
