@@ -6,15 +6,25 @@ import { signTiny } from "@/lib/storage/variants";
 import { DECIDED_STATUSES, statusGroupOf, type StatusGroup } from "@/lib/submittable/statuses";
 import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
 import { REVIEWER_LABELS } from "@/lib/reviewer/labels";
+import {
+  CONSIDERATION_LABEL_ID,
+  CONSIDERATION_LABEL_IDS,
+  CONSIDERATION_NAME,
+  canonicalLabelId,
+  labelIdsMatching,
+} from "@/lib/submittable/consideration";
 import type { QueueFilters } from "@/lib/submissions/filters";
 
-/** Labels shown and filterable in the reviewer: the art labels plus Consider. */
-export const CONSIDER_LABEL_ID = "12f06803-c610-4662-b1a6-ed88be42a8b2";
+/** Labels shown and filterable in the reviewer: the art labels plus Under
+ * Consideration (either of its two Submittable labels, see consideration.ts). */
 export const FILTER_LABELS = [
   ...REVIEWER_LABELS,
-  { submittableLabelId: CONSIDER_LABEL_ID, name: "Consider" },
+  { submittableLabelId: CONSIDERATION_LABEL_ID, name: CONSIDERATION_NAME },
 ];
-const SHOWN_LABEL_IDS = new Set(FILTER_LABELS.map((l) => l.submittableLabelId));
+const SHOWN_LABEL_IDS = new Set([
+  ...FILTER_LABELS.map((l) => l.submittableLabelId),
+  ...CONSIDERATION_LABEL_IDS,
+]);
 
 export async function queueWhere(
   f: QueueFilters,
@@ -50,7 +60,7 @@ export async function queueWhere(
     and.push({ assignments: { some: { reviewerId: f.assigned } } });
   }
   for (const id of f.labels) {
-    and.push({ labels: { some: { label: { submittableLabelId: id } } } });
+    and.push({ labels: { some: { label: { submittableLabelId: { in: labelIdsMatching(id) } } } } });
   }
   const decision = await decisionWhere(f, reviewerId);
   if (decision) and.push(decision);
@@ -178,11 +188,15 @@ export async function getQueue(f: QueueFilters, reviewerId: string | null): Prom
         labels: r.labels
           .map((l) => l.label)
           .filter((l) => SHOWN_LABEL_IDS.has(l.submittableLabelId))
-          .map((l) => ({
-            submittableLabelId: l.submittableLabelId,
-            name: nameById.get(l.submittableLabelId) ?? l.name,
-            color: l.color,
-          }))
+          .map((l) => {
+            const id = canonicalLabelId(l.submittableLabelId);
+            return { submittableLabelId: id, name: nameById.get(id) ?? l.name, color: l.color };
+          })
+          // Consider + Under Consideration would show twice.
+          .filter(
+            (l, i, all) =>
+              all.findIndex((x) => x.submittableLabelId === l.submittableLabelId) === i,
+          )
           .sort(
             (a, b) =>
               FILTER_LABELS.findIndex((x) => x.submittableLabelId === a.submittableLabelId) -

@@ -16,14 +16,15 @@ export interface LocalSubmission {
 }
 
 export interface WorkflowLabelIds {
-  consider: string | null;
+  /** Consider and Under Consideration — the same thing (consideration.ts). */
+  consider: string[];
   acceptance: string | null;
 }
 
 /**
  * Should the app import this submission's files? (§4)
  *   1. undecided → the reviewer's work
- *   2. completed + Consider → the gallery's default pool
+ *   2. completed + Consider / Under Consideration → the gallery's default pool
  *   3. accepted/published, or labelled acceptance → the gallery's "published artists" toggle
  * declined and withdrawn never; completed without Consider isn't fetched proactively.
  */
@@ -32,7 +33,7 @@ export function shouldImport(remote: RemoteSubmission, ids: WorkflowLabelIds): b
   const labels = remote.labels ?? [];
   if (status === "withdrawn" || status === "declined") return false;
   if (isUndecided(status)) return true;
-  if (status === "completed") return !!ids.consider && labels.includes(ids.consider);
+  if (status === "completed") return ids.consider.some((id) => labels.includes(id));
   if ((PUBLISHED_STATUSES as readonly string[]).includes(status ?? "")) return true;
   return !!ids.acceptance && labels.includes(ids.acceptance);
 }

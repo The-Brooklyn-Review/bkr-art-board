@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { planSync, sameSet, shouldImport } from "./plan";
 
-const ids = { consider: "consider", acceptance: "acceptance" };
+const ids = { consider: ["consider", "under-consideration"], acceptance: "acceptance" };
 const r = (submissionId: string, submissionStatus: string, labels: string[] = []) => ({
   submissionId,
   submissionStatus,
@@ -14,7 +14,8 @@ describe("shouldImport", () => {
     expect(shouldImport(r("1", "new"), ids)).toBe(true);
     expect(shouldImport(r("1", "some_future_status"), ids)).toBe(true);
   });
-  it("imports completed work only when it's marked Consider", () => {
+  it("imports completed work only when it's marked Consider or Under Consideration", () => {
+    expect(shouldImport(r("1", "completed", ["under-consideration"]), ids)).toBe(true);
     expect(shouldImport(r("1", "completed", ["consider"]), ids)).toBe(true);
     expect(shouldImport(r("1", "completed"), ids)).toBe(false);
   });

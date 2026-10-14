@@ -84,7 +84,12 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
   }
   const byName = (n: string) =>
     labels.find((l) => (l.name ?? "").trim().toLowerCase() === n)?.labelId ?? null;
-  const workflowIds = { consider: byName("consider"), acceptance: byName("acceptance") };
+  const workflowIds = {
+    consider: [byName("consider"), byName("under consideration")].filter(
+      (id): id is string => id !== null,
+    ),
+    acceptance: byName("acceptance"),
+  };
   const localLabels = await prisma.submittableLabel.findMany({
     select: { id: true, submittableLabelId: true },
   });
