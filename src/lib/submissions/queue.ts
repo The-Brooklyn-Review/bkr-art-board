@@ -2,7 +2,6 @@
 // page and the detail page's sidebar / next-previous.
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { getSignedR2Url } from "@/lib/storage/r2";
 import { signTiny } from "@/lib/storage/tiny";
 import { DECIDED_STATUSES, statusGroupOf, type StatusGroup } from "@/lib/submittable/statuses";
 import { latestDecisionPerReviewer } from "@/lib/reviewer/decisions";
@@ -142,10 +141,10 @@ export async function getQueue(f: QueueFilters, reviewerId: string | null): Prom
       submissionTitle: true,
       officialStatus: true,
       processingStatus: true,
-      thumbnailAsset: { select: { storagePathThumbnail: true } },
+      thumbnailAsset: { select: { id: true, storagePathThumbnail: true } },
       // Only the fallback cover: the first visible page, else the first page.
       assets: {
-        select: { storagePathThumbnail: true },
+        select: { id: true, storagePathThumbnail: true },
         orderBy: [{ visibleInArtLibrary: "desc" }, { fileIndex: "asc" }, { pageNumber: "asc" }],
         take: 1,
       },
@@ -169,8 +168,7 @@ export async function getQueue(f: QueueFilters, reviewerId: string | null): Prom
   const nameById = new Map(FILTER_LABELS.map((l) => [l.submittableLabelId, l.name]));
   return Promise.all(
     rows.map(async (r) => {
-      const cover =
-        r.thumbnailAsset?.storagePathThumbnail ?? r.assets[0]?.storagePathThumbnail ?? null;
+      const cover = r.thumbnailAsset ?? r.assets[0] ?? null;
       return {
         id: r.id,
         artistName: r.artistName,
@@ -198,8 +196,11 @@ export async function getQueue(f: QueueFilters, reviewerId: string | null): Prom
           pushStatus: d.pushStatus,
         })),
         pageCount: r._count.assets,
-        thumbnailUrl: cover ? await getSignedR2Url(cover) : null,
-        tinyUrl: cover ? await signTiny(cover) : null,
+        // The regular thumbnail only as an unsigned app link: it's just the
+        // fallback for a missing tiny one (a signed URL is ~500 characters,
+        // on every row).
+        thumbnailUrl: cover ? `/api/assets/${cover.id}/thumb` : null,
+        tinyUrl: cover ? await signTiny(cover.storagePathThumbnail) : null,
       };
     }),
   );

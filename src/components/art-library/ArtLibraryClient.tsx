@@ -29,11 +29,13 @@ import {
   MenuRadio,
 } from "@/components/review/Menu";
 
-// Matches the "30-60 visible cards feel manageable" density guidance —
-// also caps how many masonry items mount at once, which is the actual
-// mobile layout/DOM cost (loading="lazy" already defers network fetches,
-// but it doesn't defer DOM node creation or masonry's layout pass).
-const GRID_BATCH_SIZE = 60;
+// How many cards mount at a time; more are added as you scroll near the
+// end (see the sentinel below). Kept small because loading="lazy" didn't
+// hold back the images: measured on a production build, a batch of 60
+// downloaded all 60 thumbnails (~100 KB each) with 7 on screen — the
+// masonry columns start out short enough that Chrome counts them all as
+// "near". Also caps DOM nodes and masonry's layout pass on phones.
+const GRID_BATCH_SIZE = 24;
 
 function DensityToggle({
   density,
