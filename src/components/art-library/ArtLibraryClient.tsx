@@ -189,18 +189,10 @@ export function ArtLibraryClient({
 
   const runSearch = useMemo(() => createGallerySearch(assets), [assets]);
 
-  // Periods present, oldest first, with how many submissions each has.
+  // Periods present, oldest first.
   const periods = useMemo(() => {
-    const byId = new Map<
-      string,
-      { id: string; label: string; sortKey: number; subs: Set<string> }
-    >();
-    for (const a of assets) {
-      if (!a.period) continue;
-      const p = byId.get(a.period.id) ?? { ...a.period, subs: new Set<string>() };
-      p.subs.add(a.submissionId);
-      byId.set(a.period.id, p);
-    }
+    const byId = new Map<string, { id: string; label: string; sortKey: number }>();
+    for (const a of assets) if (a.period) byId.set(a.period.id, a.period);
     return [...byId.values()].sort((x, y) => x.sortKey - y.sortKey);
   }, [assets]);
   // A period that no longer exists (e.g. after toggling published off)
@@ -501,29 +493,24 @@ export function ArtLibraryClient({
                 role="group"
                 aria-label="Reading period"
               >
-                {[{ id: "all", label: "All", subs: null as Set<string> | null }, ...periods].map(
-                  (p) => {
-                    const on = activePeriod === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setPeriod(p.id)}
-                        aria-pressed={on}
-                        className={`text-xs px-3 py-1.5 border-r border-border last:border-r-0 whitespace-nowrap transition-colors ${
-                          on
-                            ? "bg-surface text-text shadow-[inset_0_-2px_0_var(--color-accent)]"
-                            : "text-text-muted hover:text-text hover:bg-bg-hover"
-                        }`}
-                      >
-                        {p.label}
-                        {p.subs && (
-                          <span className="ml-1.5 tabular-nums text-text-muted">{p.subs.size}</span>
-                        )}
-                      </button>
-                    );
-                  },
-                )}
+                {[{ id: "all", label: "All" }, ...periods].map((p) => {
+                  const on = activePeriod === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPeriod(p.id)}
+                      aria-pressed={on}
+                      className={`text-xs px-3 py-1.5 border-r border-border last:border-r-0 whitespace-nowrap transition-colors ${
+                        on
+                          ? "bg-surface text-text shadow-[inset_0_-2px_0_var(--color-accent)]"
+                          : "text-text-muted hover:text-text hover:bg-bg-hover"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
               </div>
               <span aria-hidden className="hidden sm:block w-px h-5 bg-border mx-1" />
             </>
@@ -646,10 +633,7 @@ export function ArtLibraryClient({
                       checked={activePeriod === p.id}
                       onSelect={() => setPeriod(p.id)}
                     >
-                      <span className="flex justify-between gap-3">
-                        {p.label}
-                        <span className="text-text-muted tabular-nums">{p.subs.size}</span>
-                      </span>
+                      {p.label}
                     </MenuRadio>
                   ))}
                   <MenuDivider />
