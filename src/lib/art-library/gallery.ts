@@ -139,3 +139,39 @@ export function createGallerySearch(
 export function hydrateGallery(data: GalleryData): LibraryAsset[] {
   return data.assets.map((a) => ({ ...data.submissions[a.submissionId], ...a }));
 }
+
+/** A stable pseudo-random rank for a submission under a shuffle seed
+ * (FNV-1a) — the same seed always gives the same order. */
+function shuffleRank(seed: number, id: string): number {
+  let h = 0x811c9dc5 ^ seed;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * The gallery's browsing order: oldest reading period first (it's the one
+ * to publish from first). With a shuffle seed, submissions are shuffled
+ * within each period — an artist's pieces stay together, in their own
+ * order — so the same artists aren't always at the top. Otherwise the
+ * order the server sent. Doesn't mutate its input.
+ */
+export function browsingOrder<T extends Pick<LibraryAsset, "submissionId" | "period">>(
+  assets: T[],
+  shuffleSeed: number | null,
+): T[] {
+  return assets
+    .map((a, i) => ({ a, i }))
+    .sort(
+      (x, y) =>
+        (x.a.period?.sortKey ?? 0) - (y.a.period?.sortKey ?? 0) ||
+        (shuffleSeed === null
+          ? 0
+          : shuffleRank(shuffleSeed, x.a.submissionId) -
+            shuffleRank(shuffleSeed, y.a.submissionId)) ||
+        x.i - y.i,
+    )
+    .map(({ a }) => a);
+}

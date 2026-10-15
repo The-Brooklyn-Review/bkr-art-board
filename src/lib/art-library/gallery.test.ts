@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  browsingOrder,
   createGallerySearch,
   hydrateGallery,
   type GalleryData,
@@ -116,5 +117,38 @@ describe("label groups", () => {
     const categories = KNOWN_LABELS.filter((l) => !(l in BADGE_LABELS));
     expect([...grouped].sort()).toEqual([...categories].sort());
     expect(new Set(grouped).size).toBe(grouped.length);
+  });
+});
+
+describe("browsingOrder", () => {
+  const winter = { id: "2025-winter", label: "Winter ’25", sortKey: 20253 };
+  const fall = { id: "2026-fall", label: "Fall ’26", sortKey: 20262 };
+  const pieces = [
+    { id: "f1", submissionId: "F", period: fall },
+    { id: "a1", submissionId: "A", period: winter },
+    { id: "a2", submissionId: "A", period: winter },
+    { id: "b1", submissionId: "B", period: winter },
+    { id: "c1", submissionId: "C", period: winter },
+    { id: "c2", submissionId: "C", period: winter },
+    { id: "d1", submissionId: "D", period: winter },
+  ];
+  const ids = (xs: typeof pieces) => xs.map((p) => p.id).join(" ");
+
+  it("without a shuffle: oldest period first, otherwise as given", () => {
+    expect(ids(browsingOrder(pieces, null))).toBe("a1 a2 b1 c1 c2 d1 f1");
+  });
+
+  it("shuffles whole submissions within each period, pieces kept together and in order", () => {
+    const orders = new Set<string>();
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const out = browsingOrder(pieces, seed);
+      expect(out.at(-1)!.id).toBe("f1"); // Fall '26 still after Winter '25
+      const s = ids(out);
+      expect(s).toMatch(/a1 a2/);
+      expect(s).toMatch(/c1 c2/);
+      orders.add(s);
+    }
+    expect(orders.size).toBeGreaterThan(1); // seeds really reorder
+    expect(ids(browsingOrder(pieces, 3))).toBe(ids(browsingOrder(pieces, 3))); // stable per seed
   });
 });

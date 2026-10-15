@@ -6,7 +6,12 @@ import type { LibraryAsset } from "@/lib/art-library/getAssets";
 import { workTabTitle } from "@/lib/format";
 import { useScrollToTopOnChange } from "@/lib/ui/useScrollToTopOnChange";
 import { DENSITY_BREAKPOINTS, cardSizes, columnsAt } from "@/lib/art-library/density";
-import { createGallerySearch, hydrateGallery, type GalleryData } from "@/lib/art-library/gallery";
+import {
+  browsingOrder,
+  createGallerySearch,
+  hydrateGallery,
+  type GalleryData,
+} from "@/lib/art-library/gallery";
 import { BADGE_LABELS, KNOWN_LABELS, LABEL_GROUPS, displayLabel } from "@/lib/art-library/labels";
 
 // The category labels (Landscape, Collage, A Grade…) — the poetry/fiction
@@ -124,6 +129,72 @@ function ColumnsToggle({
   );
 }
 
+function ShuffleIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path d="M2 4h2.5c1.6 0 2.6.8 3.5 2.2l1 1.6c.9 1.4 1.9 2.2 3.5 2.2H14M2 12h2.5c1.2 0 2-.4 2.7-1.2M10.8 5.2c.6-.8 1.5-1.2 2.7-1.2H14M12 2l2 2-2 2M12 10l2 2-2 2" />
+    </svg>
+  );
+}
+
+/**
+ * Shuffle the order of submissions (an artist's pieces stay together), so
+ * the same artists aren't always first. Press again to reshuffle; Reset
+ * goes back to the usual order. Phones get icon-only buttons.
+ */
+function ShuffleControls({
+  shuffled,
+  onShuffle,
+  onReset,
+  compact = false,
+  className = "",
+}: {
+  shuffled: boolean;
+  onShuffle: () => void;
+  onReset: () => void;
+  compact?: boolean;
+  className?: string;
+}) {
+  const base = compact
+    ? "w-9 h-8 flex items-center justify-center"
+    : "flex items-center gap-1.5 text-sm px-3 py-2";
+  return (
+    <div className={`flex border border-border shrink-0 ${className}`}>
+      <button
+        type="button"
+        onClick={onShuffle}
+        aria-pressed={shuffled}
+        aria-label={shuffled ? "Shuffle again" : "Shuffle the order of artists"}
+        title={shuffled ? "Shuffle again" : "Shuffle the order of artists"}
+        className={`${base} transition-colors ${
+          shuffled ? "bg-accent text-bg" : "text-text-muted hover:text-text"
+        }`}
+      >
+        <ShuffleIcon />
+        {!compact && (shuffled ? "Shuffle again" : "Shuffle")}
+      </button>
+      {shuffled && (
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Back to the usual order"
+          title="Back to the usual order"
+          className={`${compact ? base : "text-sm px-2.5"} border-l border-border text-text-muted hover:text-text`}
+        >
+          {compact ? "↺" : "Reset"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ArtLibraryClient({
   data,
   submissionCount,
@@ -167,6 +238,9 @@ export function ArtLibraryClient({
   // cycle's work you're choosing from — so it sits above the label chips.
   const [period, setPeriod] = useState<string>("all");
   const [density, setDensity] = useState<"compact" | "default" | "large">("default");
+  // null: the usual order; otherwise a fresh random seed per shuffle.
+  const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
+  const shuffle = () => setShuffleSeed(Math.floor(Math.random() * 2 ** 31));
   // Tracked by asset ID rather than index into `filtered` — an index would
   // go stale the instant `removeAsset` (or a search/filter change) shifts
   // the array out from under it. Initial value comes from the
@@ -223,11 +297,20 @@ export function ArtLibraryClient({
       }
       return true;
     });
-    // Oldest reading period first (it's the one to publish from first);
-    // a search keeps its relevance order instead.
+    // A search keeps its relevance order; otherwise oldest reading period
+    // first, shuffled within each period if asked (browsingOrder).
     if (hits) return kept;
-    return [...kept].sort((x, y) => (x.period?.sortKey ?? 0) - (y.period?.sortKey ?? 0));
-  }, [assets, search, activeLabels, activeFlags, showStarredOnly, runSearch, activePeriod]);
+    return browsingOrder(kept, shuffleSeed);
+  }, [
+    assets,
+    search,
+    activeLabels,
+    activeFlags,
+    showStarredOnly,
+    runSearch,
+    activePeriod,
+    shuffleSeed,
+  ]);
 
   // What's shown changed (search, filters, published toggle): back to the
   // top, showing the first batch again. Not for opening/closing an artwork
@@ -240,12 +323,13 @@ export function ArtLibraryClient({
       showStarredOnly,
       activePeriod,
       includePublished,
+      shuffleSeed,
     ]),
   );
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting pagination on filter change, not worth the in-render-adjustment rewrite at this list size
     setVisibleCount(GRID_BATCH_SIZE);
-  }, [search, activeLabels, activeFlags, showStarredOnly, activePeriod]);
+  }, [search, activeLabels, activeFlags, showStarredOnly, activePeriod, shuffleSeed]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -466,7 +550,20 @@ export function ArtLibraryClient({
             </>
           }
           aside={
-            <>
+            <div className="flex items-center gap-2">
+              <ShuffleControls
+                shuffled={shuffleSeed !== null}
+                onShuffle={shuffle}
+                onReset={() => setShuffleSeed(null)}
+                className="hidden sm:flex"
+              />
+              <ShuffleControls
+                shuffled={shuffleSeed !== null}
+                onShuffle={shuffle}
+                onReset={() => setShuffleSeed(null)}
+                compact
+                className="sm:hidden"
+              />
               <DensityToggle
                 density={density}
                 setDensity={setDensity}
@@ -478,7 +575,7 @@ export function ArtLibraryClient({
                 setDensity={setDensity}
                 className="sm:hidden"
               />
-            </>
+            </div>
           }
         />
 
