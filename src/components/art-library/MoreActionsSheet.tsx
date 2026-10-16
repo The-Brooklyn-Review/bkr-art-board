@@ -94,13 +94,6 @@ export function MoreActionsSheet({
           >
             {isPending ? "Hiding…" : "Hide"}
           </button>
-
-          <a
-            href={asset.reviewUrl}
-            className="px-4 py-3 rounded text-sm text-text hover:bg-bg-hover"
-          >
-            View Submission
-          </a>
         </div>
       </div>
     </>,

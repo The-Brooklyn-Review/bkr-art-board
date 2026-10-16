@@ -16,7 +16,6 @@ const sub = (artistName: string): GallerySubmission => ({
   period: null,
   localReviewRecommendation: "none",
   submittableUrl: null,
-  reviewUrl: "/submissions/s1",
   fileCount: 1,
 });
 

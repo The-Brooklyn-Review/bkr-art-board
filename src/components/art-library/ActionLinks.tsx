@@ -105,12 +105,6 @@ export function ActionLinks({
         >
           {isPending ? "Hiding…" : "Hide"}
         </button>
-
-        <span className="text-border">·</span>
-
-        <a href={asset.reviewUrl} className="text-text-muted hover:text-accent transition-colors">
-          View Submission
-        </a>
       </div>
     </div>
   );

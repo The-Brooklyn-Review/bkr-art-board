@@ -78,7 +78,6 @@ export interface LibraryAsset {
   localReviewRecommendation: string;
   originalFilename: string | null;
   submittableUrl: string | null;
-  reviewUrl: string;
   fileCount: number;
   pageCount: number;
 }
@@ -213,7 +212,6 @@ export async function getGalleryData(
       // Submittable's site. Confirmed the two actually differ in real
       // data before fixing this (they're generated independently).
       submittableUrl: webBase ? `${webBase}/submissions/${sub.submittableId}` : null,
-      reviewUrl: `/submissions/${submissionId}`,
       fileCount: sub._count.files,
     };
   }

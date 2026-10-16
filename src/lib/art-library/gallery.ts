@@ -15,7 +15,6 @@ export type GallerySubmission = Pick<
   | "period"
   | "localReviewRecommendation"
   | "submittableUrl"
-  | "reviewUrl"
   | "fileCount"
 >;
 
