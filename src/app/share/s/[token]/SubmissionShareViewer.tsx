@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ZoomableLightbox } from "@/components/art-library/ZoomableLightbox";
 import { ShareActions } from "../../ShareActions";
+
+// The piece on screen lives in the URL hash, 1-based (#3), so a link
+// copied from the address bar opens on that piece rather than the first.
+function pieceFromHash(count: number): number | null {
+  const n = Number.parseInt(window.location.hash.slice(1), 10);
+  return Number.isInteger(n) && n >= 1 && n <= count ? n - 1 : null;
+}
 
 // Room for the footer: name, title, the strip of pieces and the button.
 const FOOTER_RESERVE = "min(34vh, 232px)";
@@ -31,12 +38,36 @@ export function SubmissionShareViewer({
   const several = pieces.length > 1;
   const alt = submissionTitle || "Shared artwork";
 
+  // The hash is only on the client, so it's read after mount. Until it has
+  // been, the lightbox's first "view" (of startIndex) mustn't overwrite it.
+  const hashRead = useRef(false);
+  useEffect(() => {
+    if (!several) return;
+    const fromHash = () => {
+      const i = pieceFromHash(pieces.length);
+      if (i !== null) setIndex(i);
+    };
+    fromHash();
+    hashRead.current = true;
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, [several, pieces.length]);
+
+  const view = (i: number) => {
+    setIndex(i);
+    // replaceState, not a new history entry per piece, so Back still
+    // leaves the page.
+    if (several && hashRead.current && pieceFromHash(pieces.length) !== i) {
+      window.history.replaceState(null, "", `#${i + 1}`);
+    }
+  };
+
   return (
     <ZoomableLightbox
       open
       close={() => {}}
       index={index}
-      on={{ view: ({ index: i }) => setIndex(i) }}
+      on={{ view: ({ index: i }) => view(i) }}
       slides={pieces.map((p, i) => ({
         src: p.src,
         alt: `${alt} — ${i + 1} of ${pieces.length}`,
@@ -76,7 +107,7 @@ export function SubmissionShareViewer({
                     <button
                       key={p.src}
                       type="button"
-                      onClick={() => setIndex(i)}
+                      onClick={() => view(i)}
                       aria-label={`Piece ${i + 1}`}
                       aria-current={i === index ? "true" : undefined}
                       className={`shrink-0 w-12 h-12 border overflow-hidden ${
