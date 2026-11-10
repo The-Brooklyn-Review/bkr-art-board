@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { openInAppUrl, resolveShareToken } from "@/lib/sharePreview";
+import { openInAppUrl, resolveShareToken, submittableSubmissionUrl } from "@/lib/sharePreview";
 import { SharePreviewViewer } from "./SharePreviewViewer";
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@/lib/processing/previewCard";
 
@@ -48,7 +48,8 @@ export async function generateMetadata({
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const { assetId, submissionId, artistName, submissionTitle } = await getShare(token);
+  const { assetId, submissionId, submittableId, artistName, submissionTitle } =
+    await getShare(token);
   const openUrl = await openInAppUrl(submissionId, assetId);
 
   return (
@@ -59,6 +60,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         artistName={artistName}
         submissionTitle={submissionTitle}
         openUrl={openUrl}
+        submittableUrl={submittableSubmissionUrl(submittableId)}
       />
     </main>
   );

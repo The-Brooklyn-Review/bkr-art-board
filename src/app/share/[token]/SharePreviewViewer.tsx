@@ -2,6 +2,7 @@
 
 import { ZoomableLightbox } from "@/components/art-library/ZoomableLightbox";
 import { SHARE_FOOTER_MAX_HEIGHT } from "@/components/art-library/lightboxLayout";
+import { ShareActions } from "../ShareActions";
 
 // Same viewer as the authenticated Art Library (ZoomableLightbox — same
 // zoom/pan config, same dark overlay) so this doesn't feel like a
@@ -15,6 +16,7 @@ export function SharePreviewViewer({
   artistName,
   submissionTitle,
   openUrl,
+  submittableUrl,
 }: {
   imageUrl: string;
   alt: string;
@@ -22,6 +24,7 @@ export function SharePreviewViewer({
   submissionTitle: string | null;
   /** Gallery, or the review page for work that isn't in it (openInAppUrl). */
   openUrl: string;
+  submittableUrl: string | null;
 }) {
   return (
     <ZoomableLightbox
@@ -52,12 +55,7 @@ export function SharePreviewViewer({
                 <p className="text-sm text-text-muted">{submissionTitle || "Untitled"}</p>
               </div>
 
-              <a
-                href={openUrl}
-                className="inline-block font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
-              >
-                Open in BKR Art Board
-              </a>
+              <ShareActions submittableUrl={submittableUrl} openUrl={openUrl} />
             </div>
           </div>
         ),

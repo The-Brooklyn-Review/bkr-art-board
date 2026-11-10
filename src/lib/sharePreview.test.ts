@@ -24,7 +24,7 @@ function activeLink(overrides: Record<string, unknown> = {}) {
       visibleInArtLibrary: true,
       usedState: "available",
       storagePathThumbnail: "path/thumb.webp",
-      submission: { artistName: "Jane Doe", submissionTitle: "Piece" },
+      submission: { submittableId: "smt-1", artistName: "Jane Doe", submissionTitle: "Piece" },
     },
     ...overrides,
   };
@@ -42,6 +42,7 @@ describe("resolveShareToken", () => {
     await expect(resolveShareToken("tok")).resolves.toEqual({
       assetId: "asset-1",
       submissionId: "sub-1",
+      submittableId: "smt-1",
       artistName: "Jane Doe",
       submissionTitle: "Piece",
       storagePathThumbnail: "path/thumb.webp",
@@ -99,6 +100,7 @@ describe("resolveSubmissionShareToken", () => {
     previewAssetId: null,
     submission: {
       id: "sub-1",
+      submittableId: "smt-1",
       artistName: "Jane Doe",
       submissionTitle: "Pieces",
       thumbnailAssetId: null,
@@ -111,6 +113,7 @@ describe("resolveSubmissionShareToken", () => {
     mockPrisma.sharedSubmissionLink.findUnique.mockResolvedValue(link());
     await expect(resolveSubmissionShareToken("tok")).resolves.toEqual({
       submissionId: "sub-1",
+      submittableId: "smt-1",
       artistName: "Jane Doe",
       submissionTitle: "Pieces",
       assets: [piece],
@@ -125,9 +128,9 @@ describe("resolveSubmissionShareToken", () => {
       visibleInArtLibrary: true,
       usedState: { not: "do_not_use" },
     });
-    // Nothing beyond pieces, name and title is even selected.
+    // Nothing beyond pieces, name, title and the Submittable id is even selected.
     expect(Object.keys(query.include.submission.select).sort()).toEqual(
-      ["artistName", "assets", "id", "submissionTitle", "thumbnailAssetId"].sort(),
+      ["artistName", "assets", "id", "submissionTitle", "submittableId", "thumbnailAssetId"].sort(),
     );
   });
 

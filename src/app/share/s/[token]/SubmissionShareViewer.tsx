@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ZoomableLightbox } from "@/components/art-library/ZoomableLightbox";
+import { ShareActions } from "../../ShareActions";
 
 // Room for the footer: name, title, the strip of pieces and the button.
 const FOOTER_RESERVE = "min(34vh, 232px)";
@@ -15,12 +16,14 @@ export function SubmissionShareViewer({
   artistName,
   submissionTitle,
   openUrl,
+  submittableUrl,
   startIndex,
 }: {
   pieces: { src: string; width: number | null; height: number | null }[];
   artistName: string | null;
   submissionTitle: string | null;
   openUrl: string;
+  submittableUrl: string | null;
   /** The piece that was on screen when it was shared. */
   startIndex: number;
 }) {
@@ -87,12 +90,7 @@ export function SubmissionShareViewer({
                 </div>
               )}
 
-              <a
-                href={openUrl}
-                className="inline-block mt-3 font-semibold px-3 py-2 rounded bg-accent text-black hover:opacity-90"
-              >
-                Open in BKR Art Board
-              </a>
+              <ShareActions submittableUrl={submittableUrl} openUrl={openUrl} className="mt-3" />
             </div>
           </div>
         ),

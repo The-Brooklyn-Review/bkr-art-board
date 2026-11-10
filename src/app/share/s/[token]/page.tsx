@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { openInAppUrl, resolveSubmissionShareToken } from "@/lib/sharePreview";
+import {
+  openInAppUrl,
+  resolveSubmissionShareToken,
+  submittableSubmissionUrl,
+} from "@/lib/sharePreview";
 import { SubmissionShareViewer } from "./SubmissionShareViewer";
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@/lib/processing/previewCard";
 
@@ -65,6 +69,7 @@ export default async function SubmissionSharePage({
         artistName={resolved.artistName}
         submissionTitle={resolved.submissionTitle}
         openUrl={openUrl}
+        submittableUrl={submittableSubmissionUrl(resolved.submittableId)}
         startIndex={startIndex}
       />
     </main>

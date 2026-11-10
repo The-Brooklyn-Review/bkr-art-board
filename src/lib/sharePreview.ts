@@ -23,6 +23,8 @@ export function hashShareToken(token: string): string {
 export interface ResolvedShareAsset {
   assetId: string;
   submissionId: string;
+  /** Submittable's own id, for the "Open in Submittable" link. */
+  submittableId: string;
   artistName: string | null;
   submissionTitle: string | null;
   // Deliberately the cropped thumbnail (artwork region only, 1000px,
@@ -46,7 +48,9 @@ export async function resolveShareToken(token: string): Promise<ResolvedShareAss
     where: { tokenHash: hashShareToken(token) },
     include: {
       artAsset: {
-        include: { submission: { select: { artistName: true, submissionTitle: true } } },
+        include: {
+          submission: { select: { submittableId: true, artistName: true, submissionTitle: true } },
+        },
       },
     },
   });
@@ -56,6 +60,7 @@ export async function resolveShareToken(token: string): Promise<ResolvedShareAss
   return {
     assetId: link.artAssetId,
     submissionId: link.artAsset.submissionId,
+    submittableId: link.artAsset.submission.submittableId,
     artistName: link.artAsset.submission.artistName,
     submissionTitle: link.artAsset.submission.submissionTitle,
     storagePathThumbnail: link.artAsset.storagePathThumbnail,
@@ -70,6 +75,7 @@ export const SHAREABLE_ASSET = {
 
 export interface ResolvedSubmissionShare {
   submissionId: string;
+  submittableId: string;
   artistName: string | null;
   submissionTitle: string | null;
   /** In the submission's own order. Thumbnails, for the same reason as above. */
@@ -103,6 +109,7 @@ export async function resolveSubmissionShareToken(
       submission: {
         select: {
           id: true,
+          submittableId: true,
           artistName: true,
           submissionTitle: true,
           thumbnailAssetId: true,
@@ -121,6 +128,7 @@ export async function resolveSubmissionShareToken(
   const shown = (id: string | null) => (id && assets.some((a) => a.id === id) ? id : null);
   return {
     submissionId: link.submission.id,
+    submittableId: link.submission.submittableId,
     artistName: link.submission.artistName,
     submissionTitle: link.submission.submissionTitle,
     assets,
@@ -146,4 +154,14 @@ export async function openInAppUrl(submissionId: string, assetId: string): Promi
   if (inGallery) return `/art-library?asset=${assetId}`;
   if (published) return `/art-library?published=1&asset=${assetId}`;
   return `/submissions/${submissionId}`;
+}
+
+/**
+ * The submission on Submittable's own site (staff sign-in there), built the
+ * same way as the Art Library's link; null when SUBMITTABLE_WEB_BASE_URL
+ * isn't configured.
+ */
+export function submittableSubmissionUrl(submittableId: string): string | null {
+  const webBase = process.env.SUBMITTABLE_WEB_BASE_URL;
+  return webBase ? `${webBase}/submissions/${submittableId}` : null;
 }
