@@ -488,7 +488,7 @@ export function ArtLibraryClient({
     syncUrl(null, "replace");
   }
 
-  // Publishing or hiding an asset from the lightbox: drop it from the local
+  // Hiding an asset from the lightbox: drop it from the local
   // list (so the grid reflects it immediately, no revalidatePath needed —
   // see mutations.ts) and either advance to the next asset the caller
   // picked or close the lightbox if there isn't one.
@@ -498,11 +498,26 @@ export function ArtLibraryClient({
     else closeLightbox();
   }
 
-  // Publishing: with published work showing it just gets its new state in
-  // place; otherwise it leaves the grid like a hidden one.
-  function publishAsset(assetId: string, nextAssetId: string | null) {
-    if (!includePublished) return removeAsset(assetId, nextAssetId);
-    setAssets((prev) => prev.map((a) => (a.id === assetId ? { ...a, usedState: "published" } : a)));
+  // Publishing a piece makes its artist a published artist (see
+  // publishedArtistKeys): with published artists showing, their work just
+  // gets the new state in place; otherwise all of it leaves the grid —
+  // nothing of theirs is left to look at, so the lightbox closes.
+  function publishAsset(published: LibraryAsset) {
+    const sameArtist = (a: LibraryAsset) => a.artistId === published.artistId;
+    if (!includePublished) {
+      setAssets((prev) => prev.filter((a) => !sameArtist(a)));
+      closeLightbox();
+      return;
+    }
+    setAssets((prev) =>
+      prev.map((a) =>
+        a.id === published.id
+          ? { ...a, usedState: "published", publishedArtist: true }
+          : sameArtist(a)
+            ? { ...a, publishedArtist: true }
+            : a,
+      ),
+    );
   }
 
   // Browser back/forward — the only case that can change the URL out from

@@ -8,6 +8,8 @@ import { prisma } from "@/lib/db";
 import {
   GALLERY_SUBMISSION_FILTER,
   PUBLISHED_SUBMISSION_FILTER,
+  artistKeyOf,
+  publishedArtistKeys,
 } from "@/lib/art-library/getAssets";
 
 export const SHARE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // fixed 7 days — no picker
@@ -138,23 +140,29 @@ export async function resolveSubmissionShareToken(
 
 /**
  * Where "Open in BKR Art Board" goes for a signed-in viewer: the Gallery
- * when the work is there (published work, or a piece marked published, only shows with ?published=1),
+ * when the work is there (published artists' work only shows with ?published=1),
  * otherwise its review page — a share from the reviewer can be work that
  * isn't in the Gallery.
  */
 export async function openInAppUrl(submissionId: string, assetId: string): Promise<string> {
-  const [inGallery, published, asset] = await Promise.all([
+  const [inGallery, published, artist, publishedKeys] = await Promise.all([
     prisma.submittableSubmission.count({
       where: { id: submissionId, ...GALLERY_SUBMISSION_FILTER },
     }),
     prisma.submittableSubmission.count({
       where: { id: submissionId, ...PUBLISHED_SUBMISSION_FILTER },
     }),
-    prisma.artAsset.findUnique({ where: { id: assetId }, select: { usedState: true } }),
+    prisma.submittableSubmission.findUnique({
+      where: { id: submissionId },
+      select: { artistEmail: true, artistName: true },
+    }),
+    publishedArtistKeys(),
   ]);
-  // A piece marked published only shows alongside published artists.
-  const assetPublished = asset?.usedState === "published";
-  if (inGallery && !assetPublished) return `/art-library?asset=${assetId}`;
+  // An artist with a piece marked published here only shows alongside
+  // published artists (see publishedArtistKeys).
+  const key = artist && artistKeyOf(artist);
+  const artistPublished = !!key && publishedKeys.has(key);
+  if (inGallery && !artistPublished) return `/art-library?asset=${assetId}`;
   if (inGallery || published) return `/art-library?published=1&asset=${assetId}`;
   return `/submissions/${submissionId}`;
 }

@@ -24,17 +24,16 @@ export function LightboxFooter({
   siblings: LibraryAsset[];
   onJumpToSibling: (assetId: string) => void;
   /**
-   * Called after Hide or Publish successfully changes this asset's
-   * visibility. `nextAssetId` is which asset (if any) the lightbox should
-   * advance to — the caller owns removing `assetId` from its asset list and
-   * navigating, so the grid and lightbox stay in sync without a server
-   * round-trip. Hide always closes (nextAssetId: null); Publish advances to
-   * a sibling page when one exists.
+   * Called after Hide successfully changes this asset's visibility.
+   * `nextAssetId` is which asset (if any) the lightbox should advance to —
+   * the caller owns removing `assetId` from its asset list and navigating,
+   * so the grid and lightbox stay in sync without a server round-trip.
+   * Hide always closes (nextAssetId: null).
    */
   onAssetRemoved: (assetId: string, nextAssetId: string | null) => void;
-  /** After Publish: the caller either keeps it in place (published work
-   * showing) or removes it and advances to `nextAssetId`. */
-  onAssetPublished: (assetId: string, nextAssetId: string | null) => void;
+  /** After Publish: the caller moves the artist's work into the published
+   * view (all of it leaves the grid unless published artists are shown). */
+  onAssetPublished: (asset: LibraryAsset) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isStarred, setIsStarred] = useState(false);
@@ -110,18 +109,8 @@ export function LightboxFooter({
         return;
       }
 
-      // Smart transition: prefer the next page in this submission, fall
-      // back to the previous one, otherwise there's nothing left to review
-      // here — return to the gallery. `siblings` follows the same order as
-      // the grid (submission → file → page), so "next in array order" is a
-      // real next page, not just any other sibling. `pos` should always be
-      // found (this asset is necessarily its own sibling) — the -1 guard is
-      // just so a lookup miss falls back to closing instead of silently
-      // picking siblings[0] via the -1+1 arithmetic.
-      const pos = siblings.findIndex((sib) => sib.id === asset.id);
-      const next = pos === -1 ? undefined : (siblings[pos + 1] ?? siblings[pos - 1]);
       setPublishPending(false);
-      onAssetPublished(asset.id, next?.id ?? null);
+      onAssetPublished(asset);
     });
   };
 
@@ -139,7 +128,7 @@ export function LightboxFooter({
       <ConfirmModal
         open={showPublishConfirm}
         title="Mark as published?"
-        message="This moves the artwork out of the main gallery. It stays under “Include published artists”."
+        message={`This marks this piece as published and moves all of ${asset.artistName ?? "this artist"}’s work out of the main gallery. It stays under “Include published artists”.`}
         confirmText="Publish"
         onConfirm={handlePublishConfirmed}
         onCancel={() => setShowPublishConfirm(false)}

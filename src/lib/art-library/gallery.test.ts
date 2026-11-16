@@ -13,6 +13,7 @@ const sub = (artistName: string): GallerySubmission => ({
   coverLetter: "Statement",
   labels: [{ name: "painting", color: null }],
   publishedArtist: false,
+  artistId: "0",
   period: null,
   localReviewRecommendation: "none",
   submittableUrl: null,

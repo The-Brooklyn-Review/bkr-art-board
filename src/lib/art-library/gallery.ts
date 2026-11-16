@@ -12,6 +12,7 @@ export type GallerySubmission = Pick<
   | "coverLetter"
   | "labels"
   | "publishedArtist"
+  | "artistId"
   | "period"
   | "localReviewRecommendation"
   | "submittableUrl"
