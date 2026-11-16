@@ -175,18 +175,19 @@ export async function markAssetPublished(assetId: string) {
     await prisma.$transaction([
       prisma.artAsset.update({
         where: { id: assetId },
-        data: { usedState: "published", visibleInArtLibrary: false },
+        // Visibility is left alone: published work drops out of the default
+        // gallery by its usedState (see getGalleryData) and stays reachable
+        // under "Include published artists". Hiding it here made it vanish
+        // everywhere, with no way back from the gallery.
+        data: { usedState: "published" },
       }),
       prisma.reviewAction.create({
         data: {
           submissionId: asset.submissionId,
           artAssetId: assetId,
           actionType: "asset_published",
-          previousValue: {
-            usedState: asset.usedState,
-            visibleInArtLibrary: asset.visibleInArtLibrary,
-          },
-          newValue: { usedState: "published", visibleInArtLibrary: false },
+          previousValue: { usedState: asset.usedState },
+          newValue: { usedState: "published" },
         },
       }),
     ]);

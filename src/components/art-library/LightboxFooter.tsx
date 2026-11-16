@@ -18,6 +18,7 @@ export function LightboxFooter({
   siblings,
   onJumpToSibling,
   onAssetRemoved,
+  onAssetPublished,
 }: {
   asset: LibraryAsset;
   siblings: LibraryAsset[];
@@ -31,6 +32,9 @@ export function LightboxFooter({
    * a sibling page when one exists.
    */
   onAssetRemoved: (assetId: string, nextAssetId: string | null) => void;
+  /** After Publish: the caller either keeps it in place (published work
+   * showing) or removes it and advances to `nextAssetId`. */
+  onAssetPublished: (assetId: string, nextAssetId: string | null) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isStarred, setIsStarred] = useState(false);
@@ -117,7 +121,7 @@ export function LightboxFooter({
       const pos = siblings.findIndex((sib) => sib.id === asset.id);
       const next = pos === -1 ? undefined : (siblings[pos + 1] ?? siblings[pos - 1]);
       setPublishPending(false);
-      onAssetRemoved(asset.id, next?.id ?? null);
+      onAssetPublished(asset.id, next?.id ?? null);
     });
   };
 
@@ -135,7 +139,7 @@ export function LightboxFooter({
       <ConfirmModal
         open={showPublishConfirm}
         title="Mark as published?"
-        message="This will publish the artwork and remove it from the gallery. This action cannot be undone."
+        message="This moves the artwork out of the main gallery. It stays under “Include published artists”."
         confirmText="Publish"
         onConfirm={handlePublishConfirmed}
         onCancel={() => setShowPublishConfirm(false)}
@@ -168,6 +172,7 @@ export function LightboxFooter({
           setShowPublishConfirm(true);
         }}
         publishPending={publishPending}
+        published={asset.usedState === "published"}
         // The sheet stays open so "✓ Link copied" shows where you tapped.
         onShareSubmission={shareSubmission}
         shareSubmissionLabel={share.label(submissionKey, "Share whole submission")}
@@ -275,6 +280,7 @@ export function LightboxFooter({
               shareSubmissionBusy={share.copying(submissionKey)}
               onPublish={() => setShowPublishConfirm(true)}
               publishPending={publishPending}
+              published={asset.usedState === "published"}
             />
           </div>
 

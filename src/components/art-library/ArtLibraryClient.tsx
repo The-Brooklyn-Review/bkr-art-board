@@ -498,6 +498,13 @@ export function ArtLibraryClient({
     else closeLightbox();
   }
 
+  // Publishing: with published work showing it just gets its new state in
+  // place; otherwise it leaves the grid like a hidden one.
+  function publishAsset(assetId: string, nextAssetId: string | null) {
+    if (!includePublished) return removeAsset(assetId, nextAssetId);
+    setAssets((prev) => prev.map((a) => (a.id === assetId ? { ...a, usedState: "published" } : a)));
+  }
+
   // Browser back/forward — the only case that can change the URL out from
   // under this component, since our own updates above never touch it.
   useEffect(() => {
@@ -846,6 +853,7 @@ export function ArtLibraryClient({
                 siblings={siblings}
                 onJumpToSibling={navigateToAsset}
                 onAssetRemoved={removeAsset}
+                onAssetPublished={publishAsset}
               />
             );
           },

@@ -141,7 +141,9 @@ export async function getGalleryData(
   const assets = await prisma.artAsset.findMany({
     where: {
       visibleInArtLibrary: true,
-      usedState: { not: "do_not_use" },
+      // Work marked published here (the "Mark as Published" button) is
+      // only shown alongside published artists, like their submissions.
+      usedState: { notIn: options.includePublished ? ["do_not_use"] : ["do_not_use", "published"] },
       submission: options.includePublished
         ? { OR: [GALLERY_SUBMISSION_FILTER, PUBLISHED_SUBMISSION_FILTER] }
         : GALLERY_SUBMISSION_FILTER,

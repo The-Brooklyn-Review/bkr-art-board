@@ -138,21 +138,24 @@ export async function resolveSubmissionShareToken(
 
 /**
  * Where "Open in BKR Art Board" goes for a signed-in viewer: the Gallery
- * when the work is there (published work only shows with ?published=1),
+ * when the work is there (published work, or a piece marked published, only shows with ?published=1),
  * otherwise its review page — a share from the reviewer can be work that
  * isn't in the Gallery.
  */
 export async function openInAppUrl(submissionId: string, assetId: string): Promise<string> {
-  const [inGallery, published] = await Promise.all([
+  const [inGallery, published, asset] = await Promise.all([
     prisma.submittableSubmission.count({
       where: { id: submissionId, ...GALLERY_SUBMISSION_FILTER },
     }),
     prisma.submittableSubmission.count({
       where: { id: submissionId, ...PUBLISHED_SUBMISSION_FILTER },
     }),
+    prisma.artAsset.findUnique({ where: { id: assetId }, select: { usedState: true } }),
   ]);
-  if (inGallery) return `/art-library?asset=${assetId}`;
-  if (published) return `/art-library?published=1&asset=${assetId}`;
+  // A piece marked published only shows alongside published artists.
+  const assetPublished = asset?.usedState === "published";
+  if (inGallery && !assetPublished) return `/art-library?asset=${assetId}`;
+  if (inGallery || published) return `/art-library?published=1&asset=${assetId}`;
   return `/submissions/${submissionId}`;
 }
 
