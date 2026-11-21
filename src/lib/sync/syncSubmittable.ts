@@ -53,14 +53,20 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
   const log = options.log ?? (() => {});
   const pattern = (process.env.ART_LIBRARY_PROJECT_NAME_PATTERN || "visual arts").toLowerCase();
 
-  // 1. Projects
-  const projects = (await fetchAllPages<ListProject>("/v4/projects?size=500")).filter(
-    (p) => !p.isArchived && (p.name ?? "").toLowerCase().includes(pattern),
+  // 1. Projects. Live projects are synced in full; archived ones are read
+  // only so submissions the app already holds from them (accepted work
+  // imported by hand) keep refreshing — nothing new is imported from them.
+  const matching = (await fetchAllPages<ListProject>("/v4/projects?size=500")).filter((p) =>
+    (p.name ?? "").toLowerCase().includes(pattern),
   );
-  if (projects.length === 0) {
+  const liveProjectIds = new Set(matching.filter((p) => !p.isArchived).map((p) => p.projectId));
+  if (liveProjectIds.size === 0) {
     throw new Error(`No non-archived Submittable project name contains "${pattern}".`);
   }
-  log(`Projects: ${projects.map((p) => p.name).join(", ")}`);
+  const projects = matching;
+  const projectLabel = (p: ListProject) =>
+    `${p.name ?? p.projectId}${p.isArchived ? " (archived)" : ""}`;
+  log(`Projects: ${projects.map(projectLabel).join(", ")}`);
 
   // 2. Label catalogue
   const labels = await fetchAllPages<Label>("/v4/labels?size=500");
@@ -117,10 +123,13 @@ export async function syncSubmittable(options: SyncOptions = {}): Promise<SyncSu
   });
   const localById = new Map(local.map((l) => [l.id, l]));
   const plan = planSync(remote as RemoteSubmission[], local, workflowIds);
+  plan.toImport = plan.toImport.filter((r) =>
+    liveProjectIds.has(remoteById.get(r.submissionId)?.projectId ?? ""),
+  );
 
   const summary: SyncSummary = {
     dryRun,
-    projects: projects.map((p) => p.name ?? p.projectId),
+    projects: projects.map(projectLabel),
     remoteCount: remote.length,
     localCount: local.length,
     updated: 0,

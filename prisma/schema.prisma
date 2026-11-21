@@ -51,7 +51,11 @@ model SubmittableSubmission {
   artistName                String?           @map("artist_name")
   artistEmail               String?           @map("artist_email")
   artistPhone               String?           @map("artist_phone")
+  /// Personal website, extracted from the form, cover letter or PDF pages
+  /// by scripts/extract-metadata.ts. Public-facing — safe to show.
   artistWebsite             String?           @map("artist_website")
+  /// Instagram handle without the "@", extracted alongside artistWebsite.
+  artistInstagram           String?           @map("artist_instagram")
   submissionTitle           String?           @map("submission_title")
   coverLetter               String?           @map("cover_letter")
   artistStatement           String?           @map("artist_statement")
@@ -171,15 +175,22 @@ model ArtAsset {
   extractedText        String?                 @map("extracted_text")
   pageType             String                  @default("unknown") @map("page_type")
   visibleInArtLibrary  Boolean                 @default(true) @map("visible_in_art_library")
-  /// Reserved for future manual metadata entry — not currently read or
-  /// written anywhere in the app or scripts (verified 2026-08).
+  /// The individual piece's title, when the artist gave one anywhere (a
+  /// caption on the page, a numbered list in the cover letter, …). Written
+  /// by scripts/extract-metadata.ts; null when no title could be found.
   localTitle           String?                 @map("local_title")
-  /// Reserved, same as localTitle.
+  /// Same source as localTitle, when stated.
   medium               String?                 @map("medium")
-  /// Reserved, same as localTitle.
+  /// Same source as localTitle, when stated.
   dimensions           String?                 @map("dimensions")
-  /// Reserved, same as localTitle.
+  /// Same source as localTitle, when stated.
   year                 String?                 @map("year")
+  /// Where localTitle came from: page_caption | cover_letter | form_field |
+  /// submission_title. Null when no title was found.
+  titleSource          String?                 @map("title_source")
+  /// When extract-metadata.ts last processed this asset. Null = not yet
+  /// (new imports, and re-imports, which recreate assets).
+  metadataExtractedAt  DateTime?               @map("metadata_extracted_at") @db.Timestamptz(6)
   usedState            String                  @default("available") @map("used_state")
   /// JSON-stringified TagResult (see scripts/tag-all-artwork.ts), not a
   /// native Json column — parsed by hand in getAssets.ts into a typed

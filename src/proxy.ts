@@ -22,7 +22,11 @@ const PUBLIC_PATHS = ["/login", "/robots.txt", "/icon", "/apple-icon", "/opengra
 // this prefix re-checks the token's own hash/expiry/revocation/visibility
 // itself, so exempting the prefix here is safe: an invalid or guessed
 // token gets a 404 from the route, not a peek at anything.
-const PUBLIC_PREFIXES = ["/share/"];
+// /api/public/ is the website's artwork lookup (src/app/api/public/). It
+// checks its own secret key on every request and returns 401 without it,
+// so the password cookie isn't needed — the caller is a server, not a
+// signed-in person.
+const PUBLIC_PREFIXES = ["/share/", "/api/public/"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

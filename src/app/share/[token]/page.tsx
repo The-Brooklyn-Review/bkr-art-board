@@ -23,7 +23,7 @@ export async function generateMetadata({
   const resolved = await resolveShareToken(token);
   if (!resolved) return {};
 
-  const title = resolved.submissionTitle || "Untitled";
+  const title = resolved.pieceTitle || resolved.submissionTitle || "Untitled";
   const description = resolved.artistName
     ? `By ${resolved.artistName} — shared from The Brooklyn Review Art Board`
     : "Shared from The Brooklyn Review Art Board";
@@ -48,8 +48,10 @@ export async function generateMetadata({
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const { assetId, submissionId, submittableId, artistName, submissionTitle } =
-    await getShare(token);
+  const share = await getShare(token);
+  const { assetId, submissionId, submittableId, artistName } = share;
+  // The piece's own title when the artist named it, else the submission's.
+  const submissionTitle = share.pieceTitle || share.submissionTitle;
   const openUrl = await openInAppUrl(submissionId, assetId);
 
   return (
