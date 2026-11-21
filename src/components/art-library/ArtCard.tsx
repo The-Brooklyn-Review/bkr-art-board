@@ -85,7 +85,7 @@ export function ArtCard({
           onError={(e) => {
             if (e.currentTarget.srcset) e.currentTarget.removeAttribute("srcset");
           }}
-          alt={asset.submissionTitle ?? ""}
+          alt={asset.pieceTitle ?? asset.submissionTitle ?? ""}
           loading="lazy"
           width={asset.width ?? undefined}
           height={asset.height ?? undefined}
@@ -104,8 +104,23 @@ export function ArtCard({
             </span>
           )}
         </div>
-        {asset.submissionTitle && (
-          <p className="text-xs text-text-muted truncate">{asset.submissionTitle}</p>
+        {/* The piece's own title first when the artist named it, then the
+            submission's (truncated first) — e.g. a series title over
+            individually named photos. */}
+        {asset.pieceTitle ? (
+          <p
+            className="text-xs text-text-muted truncate"
+            title={[asset.pieceTitle, asset.submissionTitle].filter(Boolean).join(" · ")}
+          >
+            <span className="italic text-text">{asset.pieceTitle}</span>
+            {asset.submissionTitle && asset.submissionTitle !== asset.pieceTitle && (
+              <span className="opacity-70">{` · ${asset.submissionTitle}`}</span>
+            )}
+          </p>
+        ) : (
+          asset.submissionTitle && (
+            <p className="text-xs text-text-muted truncate">{asset.submissionTitle}</p>
+          )
         )}
         {knownLabels.length > 0 && (
           <p className="text-[11px] text-accent uppercase tracking-wide mt-0.5 truncate">

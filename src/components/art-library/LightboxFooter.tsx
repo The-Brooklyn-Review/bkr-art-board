@@ -58,6 +58,18 @@ export function LightboxFooter({
       // The artwork on screen leads the link (its preview image).
       async () => `/share/s/${await createSubmissionShareLink(asset.submissionId, asset.id)}`,
     );
+  const pieceDetails = [asset.medium, asset.dimensions, asset.year].filter(Boolean).join(", ");
+  const pieceLine = [asset.pieceTitle, pieceDetails].filter(Boolean).join(", ");
+  const contactLinks = [
+    asset.artistWebsite && {
+      href: asset.artistWebsite,
+      label: asset.artistWebsite.replace(/^https:\/\/(www\.)?/, ""),
+    },
+    asset.artistInstagram && {
+      href: `https://www.instagram.com/${asset.artistInstagram}/`,
+      label: `@${asset.artistInstagram}`,
+    },
+  ].filter((l): l is { href: string; label: string } => !!l);
   const badges = badgesOf(asset.labels);
   const knownLabels = asset.labels.filter(
     (l) => KNOWN_LABELS.includes(l.name) && !(l.name in BADGE_LABELS),
@@ -193,15 +205,28 @@ export function LightboxFooter({
               </p>
               {/* One line, full title on hover: a wrapped title pushed the
                   action row out of the reserved band (globals.css). */}
-              <p className="text-sm text-text-muted truncate" title={asset.submissionTitle ?? ""}>
-                {asset.submissionTitle}
-              </p>
+              {asset.pieceTitle ? (
+                <p
+                  className="text-sm text-text-muted truncate"
+                  title={[pieceLine, asset.submissionTitle].filter(Boolean).join(" — from ")}
+                >
+                  <span className="text-text italic">{asset.pieceTitle}</span>
+                  {pieceDetails && <span>{`, ${pieceDetails}`}</span>}
+                  {asset.submissionTitle && (
+                    <span className="opacity-70">{` · ${asset.submissionTitle}`}</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm text-text-muted truncate" title={asset.submissionTitle ?? ""}>
+                  {asset.submissionTitle}
+                </p>
+              )}
               {knownLabels.length > 0 && (
                 <p className="text-xs text-accent uppercase tracking-wide mt-1">
                   {knownLabels.map((l) => displayLabel(l.name)).join(" · ")}
                 </p>
               )}
-              {(asset.originalFilename || asset.coverLetter) && (
+              {(asset.originalFilename || asset.coverLetter || contactLinks.length > 0) && (
                 <p className="flex items-baseline gap-x-2 text-xs text-text-muted mt-1 min-w-0">
                   {asset.originalFilename && (
                     <span className="truncate">
@@ -222,6 +247,21 @@ export function LightboxFooter({
                       </button>
                     </>
                   )}
+                  {contactLinks.map((l, i) => (
+                    <span key={l.href} className="contents">
+                      {(i > 0 || asset.originalFilename || asset.coverLetter) && (
+                        <span aria-hidden>·</span>
+                      )}
+                      <a
+                        href={l.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 underline hover:text-text"
+                      >
+                        {l.label}
+                      </a>
+                    </span>
+                  ))}
                 </p>
               )}
             </div>

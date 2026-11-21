@@ -29,6 +29,8 @@ export interface ResolvedShareAsset {
   submittableId: string;
   artistName: string | null;
   submissionTitle: string | null;
+  /** This piece's own title, when the artist gave one (extract-metadata.ts). */
+  pieceTitle: string | null;
   // Deliberately the cropped thumbnail (artwork region only, 1000px,
   // q82 webp — see processImageVariants in scripts/process-submission.ts),
   // not the full uncropped "large" image the authenticated lightbox shows.
@@ -65,6 +67,7 @@ export async function resolveShareToken(token: string): Promise<ResolvedShareAss
     submittableId: link.artAsset.submission.submittableId,
     artistName: link.artAsset.submission.artistName,
     submissionTitle: link.artAsset.submission.submissionTitle,
+    pieceTitle: link.artAsset.localTitle,
     storagePathThumbnail: link.artAsset.storagePathThumbnail,
   };
 }

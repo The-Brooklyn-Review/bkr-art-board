@@ -447,7 +447,10 @@ export function ArtLibraryClient({
   useEffect(() => {
     if (!currentAsset) return;
     const before = document.title;
-    document.title = workTabTitle(currentAsset.artistName, currentAsset.submissionTitle);
+    document.title = workTabTitle(
+      currentAsset.artistName,
+      currentAsset.pieceTitle || currentAsset.submissionTitle,
+    );
     return () => {
       document.title = before;
     };
